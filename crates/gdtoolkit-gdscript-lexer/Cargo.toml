@@ -1,5 +1,5 @@
 [package]
-name = "gdtoolkit-parser"
+name = "gdtoolkit-gdscript-lexer"
 version = "0.0.0"
 authors = ["Denis BOURGE <bourge.denis@gmail.com>"]
 edition = "2021"
@@ -7,4 +7,3 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gdtoolkit-types = { path = "../gdtoolkit-types" }

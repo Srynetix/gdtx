@@ -1,5 +1,5 @@
 [package]
-name = "gdtoolkit-types"
+name = "gdtoolkit-gdscript-types"
 version = "0.0.0"
 authors = ["Denis BOURGE <bourge.denis@gmail.com>"]
 edition = "2021"

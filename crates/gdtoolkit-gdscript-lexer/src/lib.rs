@@ -1,5 +1,13 @@
 // From https://michael-f-bryan.github.io/static-analyser-in-rust/book/lex.html
 
+/*
+ * TODO:
+ *      Strings
+ *      Comments
+ *      Indentation
+ *      Boolean
+ */
+
 pub type IntType = i64;
 pub type FloatType = f64;
 
@@ -21,13 +29,14 @@ pub enum Error {
     WrongFloatValue(#[from] std::num::ParseFloatError),
 
     #[error(transparent)]
-    WrongIntValue(#[from] std::num::ParseIntError)
+    WrongIntValue(#[from] std::num::ParseIntError),
 }
 
 type Result<T> = core::result::Result<T, Error>;
 
 fn take_while<F>(data: &str, mut predicate: F) -> Result<(&str, usize)>
-    where F: FnMut(char) -> bool
+where
+    F: FnMut(char) -> bool,
 {
     let mut current_index = 0;
     for ch in data.chars() {
@@ -74,20 +83,51 @@ fn read_number(data: &str) -> Result<(Token, usize)> {
     }
 }
 
+fn read_keyword(data: &str) -> Option<Keyword> {
+    let tok = match data {
+        "break" => Keyword::Break,
+        "case" => Keyword::Case,
+        "class" => Keyword::Class,
+        "class_name" => Keyword::ClassName,
+        "const" => Keyword::Const,
+        "continue" => Keyword::Continue,
+        "elif" => Keyword::Elif,
+        "else" => Keyword::Else,
+        "enum" => Keyword::Enum,
+        "export" => Keyword::Export,
+        "extends" => Keyword::Extends,
+        "for" => Keyword::For,
+        "func" => Keyword::Func,
+        "if" => Keyword::If,
+        "onready" => Keyword::OnReady,
+        "pass" => Keyword::Pass,
+        "return" => Keyword::Return,
+        "signal" => Keyword::Signal,
+        "static" => Keyword::Static,
+        "switch" => Keyword::Switch,
+        "var" => Keyword::Var,
+        "while" => Keyword::While,
+        "yield" => Keyword::Yield,
+        _ => return None,
+    };
+
+    Some(tok)
+}
+
 fn read_ident(data: &str) -> Result<(Token, usize)> {
     // identifiers can't start with a number
     match data.chars().next() {
         Some(ch) if ch.is_ascii_digit() => return Err(Error::WrongIdentifier),
         None => return Err(Error::UnexpectedEof),
-        _ => {},
+        _ => {}
     }
 
     let (got, bytes_read) = take_while(data, |ch| ch == '_' || ch.is_alphanumeric())?;
 
-    // TODO: Recognise keywords using a `match` statement here.
-
-    let tok = Token::Ident(got.to_string());
-    Ok((tok, bytes_read))
+    match read_keyword(got) {
+        Some(k) => Ok((Token::Keyword(k), bytes_read)),
+        None => Ok((Token::Ident(got.to_string()), bytes_read)),
+    }
 }
 
 fn read_whitespace(data: &str) -> Result<(Token, usize)> {
@@ -95,7 +135,42 @@ fn read_whitespace(data: &str) -> Result<(Token, usize)> {
     Ok((Token::Whitespace(s.into()), bytes_read))
 }
 
+fn read_size2_token(data: &str) -> Result<Option<Token>> {
+    let mut chars = data.chars();
+
+    let first = match chars.next() {
+        Some(c) => c,
+        None => return Err(Error::UnexpectedEof),
+    };
+
+    let second = match chars.next() {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+
+    let tok = match (first, second) {
+        ('+', '=') => Token::Operator(Operator::AddAssign),
+        ('&', '&') => Token::Operator(Operator::And),
+        ('/', '=') => Token::Operator(Operator::DivAssign),
+        ('=', '=') => Token::Operator(Operator::Eq),
+        (':', '=') => Token::Operator(Operator::Infer),
+        ('%', '=') => Token::Operator(Operator::ModAssign),
+        ('!', '=') => Token::Operator(Operator::NotEq),
+        ('|', '|') => Token::Operator(Operator::Or),
+        ('-', '=') => Token::Operator(Operator::SubAssign),
+        ('-', '>') => Token::Operator(Operator::TypeArrow),
+        (_, _) => return Ok(None),
+    };
+
+    Ok(Some(tok))
+}
+
 fn read_single_token(data: &str) -> Result<(Token, usize)> {
+    // First, try size2 token
+    if let Some(tok) = read_size2_token(data)? {
+        return Ok((tok, 2));
+    }
+
     let next = match data.chars().next() {
         Some(c) => c,
         None => return Err(Error::UnexpectedEof),
@@ -126,10 +201,10 @@ fn read_single_token(data: &str) -> Result<(Token, usize)> {
         '/' => (Token::Punct(Punct::Slash), 1),
         '\n' => (Token::LineFeed, 1),
         '\r' => (Token::CarriageReturn, 1),
-        '0' ..= '9' => read_number(data)?,
+        '0'..='9' => read_number(data)?,
         ' ' | '\t' => read_whitespace(data)?,
         c @ '_' | c if c.is_alphabetic() => read_ident(data)?,
-        other => return Err(Error::UnknownCharacter(other))
+        other => return Err(Error::UnknownCharacter(other)),
     };
 
     Ok((tok, length))
@@ -139,14 +214,14 @@ pub struct Lexer;
 
 struct LexerInner {
     cursor: usize,
-    remaining_text: String
+    remaining_text: String,
 }
 
 impl LexerInner {
     pub fn new(text: &str) -> Self {
         Self {
             cursor: 0,
-            remaining_text: text.into()
+            remaining_text: text.into(),
         }
     }
 
@@ -202,11 +277,27 @@ pub enum Token {
     Keyword(Keyword),
     Ident(String),
     Value(Value),
+    Operator(Operator),
     Punct(Punct),
     Whitespace(String),
     CarriageReturn,
     LineFeed,
-    Eof
+    Eof,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    AddAssign,
+    And,
+    DivAssign,
+    Eq,
+    Infer,
+    ModAssign,
+    MulAssign,
+    NotEq,
+    Or,
+    SubAssign,
+    TypeArrow,
 }
 
 #[derive(Debug, PartialEq)]
@@ -241,58 +332,131 @@ pub enum Value {
     Float(FloatType),
     SingleQuotedString(String),
     DoubleQuotedString(String),
-    Boolean(bool)
+    Boolean(bool),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Keyword {
-    Var,
-    Export,
-    Static,
-    If,
+    Break,
+    Case,
+    Class,
+    ClassName,
+    Const,
+    Continue,
     Elif,
     Else,
-    While,
-    For,
-    OnReady,
-    Switch,
-    Case,
-    Return,
-    Break,
-    Continue,
-    Yield,
-    Signal,
-    Func,
-    Class,
     Enum,
-    Const
+    Export,
+    Extends,
+    For,
+    Func,
+    If,
+    OnReady,
+    Pass,
+    Return,
+    Signal,
+    Static,
+    Switch,
+    Var,
+    While,
+    Yield,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn tok_int(value: IntType) -> Token {
+        Token::Value(Value::Int(value))
+    }
+
+    fn tok_kw(value: Keyword) -> Token {
+        Token::Keyword(value)
+    }
+
+    fn tok_ws(value: &str) -> Token {
+        Token::Whitespace(value.into())
+    }
+
+    fn tok_op(value: Operator) -> Token {
+        Token::Operator(value)
+    }
+
+    fn tok_ident(value: &str) -> Token {
+        Token::Ident(value.into())
+    }
+
+    fn tok_punct(value: Punct) -> Token {
+        Token::Punct(value)
+    }
+
+    fn lex_tokens(text: &str) -> Vec<Token> {
+        Lexer::new()
+            .lex(text)
+            .unwrap()
+            .into_iter()
+            .map(|(t, _start, _end)| t)
+            .collect()
+    }
+
     #[test]
-    fn test_one() {
-        let lexer = Lexer::new();
+    fn test_expr() {
         assert_eq!(
-            lexer.lex("1 + 1 + (a * 2)"),
+            lex_tokens("1 += 1abcd + (a * 2) && 5 & 1"),
             vec![
-                Token::Value(Value::Int(1)),
-                Token::Whitespace(" ".into()),
-                Token::Punct(Punct::Plus),
-                Token::Whitespace(" ".into()),
-                Token::Value(Value::Int(1)),
-                Token::Whitespace(" ".into()),
-                Token::Operator(Operator::Plus),
-                Token::Whitespace(" ".into()),
-                Token::Punct(Punct::OpenParens),
-                Token::Ident("a".into()),
-                Token::Whitespace(" ".into()),
-                Token::Operator(Operator::Multiply),
-                Token::Whitespace(" ".into()),
-                Token::Value(Value::Int(2)),
-                Token::Punct(Punct::ClosedParens),
+                tok_int(1),
+                tok_ws(" "),
+                tok_op(Operator::AddAssign),
+                tok_ws(" "),
+                tok_int(1),
+                tok_ident("abcd"),
+                tok_ws(" "),
+                tok_punct(Punct::Plus),
+                tok_ws(" "),
+                tok_punct(Punct::OpenParens),
+                tok_ident("a"),
+                tok_ws(" "),
+                tok_punct(Punct::Asterisk),
+                tok_ws(" "),
+                tok_int(2),
+                tok_punct(Punct::ClosedParens),
+                tok_ws(" "),
+                tok_op(Operator::And),
+                tok_ws(" "),
+                tok_int(5),
+                tok_ws(" "),
+                tok_punct(Punct::Ampersand),
+                tok_ws(" "),
+                tok_int(1),
+                Token::Eof
+            ]
+        )
+    }
+
+    #[test]
+    fn test_func() {
+        assert_eq!(
+            lex_tokens("static func dummy(a: int) -> void:\n    pass"),
+            vec![
+                tok_kw(Keyword::Static),
+                tok_ws(" "),
+                tok_kw(Keyword::Func),
+                tok_ws(" "),
+                tok_ident("dummy"),
+                tok_punct(Punct::OpenParens),
+                tok_ident("a"),
+                tok_punct(Punct::Colon),
+                tok_ws(" "),
+                tok_ident("int"),
+                tok_punct(Punct::ClosedParens),
+                tok_ws(" "),
+                tok_op(Operator::TypeArrow),
+                tok_ws(" "),
+                tok_ident("void"),
+                tok_punct(Punct::Colon),
+                Token::LineFeed,
+                tok_ws("    "),
+                tok_kw(Keyword::Pass),
                 Token::Eof
             ]
         )

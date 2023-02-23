@@ -36,7 +36,7 @@ pub struct GdClass {
     members: Vec<GdMember>,
     methods: Vec<GdMethod>,
     enums: Vec<GdEnum>,
-    classes: Vec<GdClass>
+    classes: Vec<GdClass>,
 }
 
 #[derive(Debug)]
@@ -79,13 +79,13 @@ impl GdBinOperation {
 #[derive(Debug)]
 pub struct GdEnumEntry {
     name: GdIdentifier,
-    value: Option<IntType>
+    value: Option<IntType>,
 }
 
 #[derive(Debug)]
 pub struct GdEnum {
     name: GdIdentifier,
-    entries: Vec<GdEnumEntry>
+    entries: Vec<GdEnumEntry>,
 }
 
 #[derive(Debug)]
@@ -300,7 +300,7 @@ mod tests {
                 )],
             }],
             enums: vec![],
-            classes: vec![]
+            classes: vec![],
         };
     }
 

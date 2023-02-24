@@ -30,13 +30,13 @@ impl From<&'static str> for GdTypeName {
 
 #[derive(Debug)]
 pub struct GdClass {
-    name: GdIdentifier,
-    inherits_from: GdClassName,
-    constants: Vec<GdConstant>,
-    members: Vec<GdMember>,
-    methods: Vec<GdMethod>,
-    enums: Vec<GdEnum>,
-    classes: Vec<GdClass>,
+    pub name: GdIdentifier,
+    pub inherits_from: GdClassName,
+    pub constants: Vec<GdConstant>,
+    pub members: Vec<GdMember>,
+    pub methods: Vec<GdMethod>,
+    pub enums: Vec<GdEnum>,
+    pub classes: Vec<GdClass>,
 }
 
 #[derive(Debug)]
@@ -78,14 +78,14 @@ impl GdBinOperation {
 
 #[derive(Debug)]
 pub struct GdEnumEntry {
-    name: GdIdentifier,
-    value: Option<IntType>,
+    pub name: GdIdentifier,
+    pub value: Option<IntType>,
 }
 
 #[derive(Debug)]
 pub struct GdEnum {
-    name: GdIdentifier,
-    entries: Vec<GdEnumEntry>,
+    pub name: GdIdentifier,
+    pub entries: Vec<GdEnumEntry>,
 }
 
 #[derive(Debug)]
@@ -96,9 +96,9 @@ pub enum GdCondition {
 
 #[derive(Debug)]
 pub struct GdIfCondition {
-    if_branch: GdConditionBranch,
-    elif_branches: Vec<GdConditionBranch>,
-    else_branch: Vec<GdInstruction>,
+    pub if_branch: GdConditionBranch,
+    pub elif_branches: Vec<GdConditionBranch>,
+    pub else_branch: Vec<GdInstruction>,
 }
 
 impl GdIfCondition {
@@ -123,8 +123,8 @@ impl GdIfCondition {
 
 #[derive(Debug)]
 pub struct GdConditionBranch {
-    test: GdExpr,
-    block: Vec<GdInstruction>,
+    pub test: GdExpr,
+    pub block: Vec<GdInstruction>,
 }
 
 #[derive(Debug)]
@@ -212,17 +212,17 @@ pub enum GdMemberQualifier {
 
 #[derive(Debug)]
 pub struct GdMember {
-    qualifier: GdMemberQualifier,
-    name: GdIdentifier,
-    gd_type: Option<GdTypeName>,
-    value: Option<GdValue>,
+    pub qualifier: GdMemberQualifier,
+    pub name: GdIdentifier,
+    pub gd_type: Option<GdTypeName>,
+    pub value: Option<GdValue>,
 }
 
 #[derive(Debug)]
 pub struct GdConstant {
-    name: GdIdentifier,
-    gd_type: Option<GdTypeName>,
-    value: GdValue,
+    pub name: GdIdentifier,
+    pub gd_type: Option<GdTypeName>,
+    pub value: GdValue,
 }
 
 #[derive(Debug)]
@@ -233,17 +233,17 @@ pub enum GdMethodQualifier {
 
 #[derive(Debug)]
 pub struct GdMethodArgument {
-    name: GdIdentifier,
-    gd_type: Option<GdTypeName>,
-    default_value: Option<GdValue>,
+    pub name: GdIdentifier,
+    pub gd_type: Option<GdTypeName>,
+    pub default_value: Option<GdValue>,
 }
 
 #[derive(Debug)]
 pub struct GdMethod {
-    qualifier: GdMethodQualifier,
-    name: GdIdentifier,
-    arguments: Vec<GdMethodArgument>,
-    block: Vec<GdInstruction>,
+    pub qualifier: GdMethodQualifier,
+    pub name: GdIdentifier,
+    pub arguments: Vec<GdMethodArgument>,
+    pub block: Vec<GdInstruction>,
 }
 
 #[cfg(test)]
@@ -263,7 +263,7 @@ mod tests {
          *     else:
          *         return 8
          */
-        let class_instance = GdClass {
+        GdClass {
             name: "Sample".into(),
             inherits_from: "Object".into(),
             constants: vec![],
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn test_expr() {
         // 1 + 2 + (3 + 4) * 6 - var
-        let expr = GdExpr::math_add(
+        GdExpr::math_add(
             GdExpr::int(1),
             GdExpr::math_add(
                 GdExpr::int(2),

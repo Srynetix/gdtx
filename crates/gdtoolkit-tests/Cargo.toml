@@ -1,5 +1,5 @@
 [package]
-name = "gdtoolkit-gdscript-types"
+name = "gdtoolkit-tests"
 version = "0.0.0"
 authors = ["Denis BOURGE <bourge.denis@gmail.com>"]
 edition = "2021"
@@ -7,3 +7,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tracing-tree = "0.2.2"

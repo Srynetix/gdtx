@@ -9,6 +9,8 @@ edition = "2021"
 [dependencies]
 thiserror = "1.0.38"
 gdtoolkit-gdscript-lexer = { path = "../gdtoolkit-gdscript-lexer" }
+tracing = "0.1.37"
 
 [dev-dependencies]
 indoc = "2.0.0"
+tracing-subscriber = "0.3.16"

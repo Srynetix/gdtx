@@ -1,22 +1,78 @@
 // Thanks to https://michael-f-bryan.github.io/static-analyser-in-rust/book/lex.html
 
-use crate::token::{FloatType, IntType, Keyword, Operator, Punct, Token, Value};
+use std::{cmp::Ordering, fmt::Write};
+
 use crate::{
     error::{ErrorContext, ParseError, ParseResult},
     token::QuoteMode,
 };
+use crate::{
+    token::{FloatType, IntType, Keyword, Operator, Punct, Token, Value},
+    NewLine,
+};
+use serde::{Deserialize, Serialize};
+use tracing::debug;
+
+struct TokenView<'a>(&'a [char]);
+
+impl<'a> std::fmt::Display for TokenView<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const MAX_ELEMS: usize = 20;
+
+        f.write_char('"')?;
+
+        for elem in self.0.iter().take(MAX_ELEMS) {
+            match elem {
+                '\n' => f.write_str("\\n")?,
+                '\r' => f.write_str("\\r")?,
+                c => f.write_char(*c)?,
+            }
+        }
+
+        if self.0.len() > MAX_ELEMS {
+            f.write_char('…')?;
+        }
+
+        f.write_char('"')?;
+
+        Ok(())
+    }
+}
 
 pub struct TokenReader {
     cursor: usize,
     remaining_text: Vec<char>,
 }
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct TokenReaderContext {
     pub previous_token: Option<Token>,
-    pub indent_sample: Option<(IndentationType, usize)>,
+    pub indentation_type: IndentationType,
+    pub indentation_size: usize,
+    pub indentation_seen: bool,
+    pub current_indent: usize,
     pub cols_seen: usize,
     pub lines_seen: usize,
+}
+
+impl TokenReaderContext {
+    pub fn position(&self) -> (usize, usize) {
+        (self.lines_seen, self.cols_seen)
+    }
+}
+
+impl Default for TokenReaderContext {
+    fn default() -> Self {
+        Self {
+            previous_token: None,
+            indentation_type: IndentationType::Space,
+            indentation_size: 4,
+            indentation_seen: false,
+            current_indent: 0,
+            cols_seen: 0,
+            lines_seen: 0,
+        }
+    }
 }
 
 struct TokenReadUtils;
@@ -32,6 +88,7 @@ impl TokenReadUtils {
         )
     }
 
+    #[tracing::instrument(skip(predicate), fields(data = %TokenView(data)), ret)]
     fn take_while<'a, F>(
         ctx: &TokenReaderContext,
         data: &'a [char],
@@ -58,12 +115,14 @@ impl TokenReadUtils {
         }
     }
 
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
     fn read_comment(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         let (comment, chars_read) =
             Self::take_while(ctx, &data[1..], |c| c != '\n' && c != '\r').unwrap_or((&[], 0));
         Ok((Token::Comment(comment.iter().collect()), chars_read + 1))
     }
 
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
     fn read_number(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         let mut seen_dot = false;
 
@@ -97,6 +156,7 @@ impl TokenReadUtils {
         }
     }
 
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
     fn read_string(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         let delimiter = data[0];
         let mut prev_char = delimiter;
@@ -131,6 +191,7 @@ impl TokenReadUtils {
         ))
     }
 
+    #[tracing::instrument(ret)]
     fn read_keyword(data: &str) -> Option<Keyword> {
         let tok = match data {
             "and" => Keyword::And,
@@ -181,7 +242,8 @@ impl TokenReadUtils {
         Some(tok)
     }
 
-    fn read_ident(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
+    fn read_identifier(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         // identifiers can't start with a number
         match data.first() {
             Some(ch) if ch.is_ascii_digit() => {
@@ -203,39 +265,87 @@ impl TokenReadUtils {
 
         match Self::read_keyword(&got) {
             Some(k) => Ok((Token::Keyword(k), chars_read)),
-            None => Ok((Token::Ident(got.to_string()), chars_read)),
+            None => Ok((Token::Identifier(got.to_string()), chars_read)),
         }
     }
 
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
     fn read_whitespace(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         let (s, chars_read) = Self::take_while(ctx, data, |ch| ch == ' ' || ch == '\t')?;
         Ok((Token::Whitespace(s.iter().collect()), chars_read))
     }
 
-    fn read_indent(ctx: &mut TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
-        if let Some((sample_type, sample_size)) = &ctx.indent_sample {
-            let char_to_scan = sample_type.as_char();
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
+    fn try_read_indent(
+        ctx: &mut TokenReaderContext,
+        data: &[char],
+    ) -> ParseResult<Option<(Vec<Token>, usize)>> {
+        let mut toks = vec![];
+        let mut count = 0;
 
-            let (_, chars_read) = Self::take_while(ctx, data, |ch| ch == char_to_scan)?;
-            if chars_read % sample_size != 0 {
-                return Err(Self::build_error(ctx, ParseError::InvalidIndentation));
+        let first_char = data.first();
+        match first_char {
+            Some(' ' | '\t') => {
+                // Indents or dedents
+                let (this_indent, chars_read) =
+                    Self::take_while(ctx, data, |ch| ch == ' ' || ch == '\t')?;
+                count += chars_read;
+
+                if !ctx.indentation_seen {
+                    // Use this indent as a basis
+                    ctx.indentation_seen = true;
+                    ctx.indentation_type = match this_indent[0] {
+                        ' ' => IndentationType::Space,
+                        '\t' => IndentationType::Tab,
+                        _ => unreachable!(),
+                    };
+                    ctx.current_indent += 1;
+                    ctx.indentation_size = chars_read;
+                    toks.push(Token::Indent);
+                } else {
+                    let current_indent_size = ctx.current_indent * ctx.indentation_size;
+                    match current_indent_size.cmp(&chars_read) {
+                        Ordering::Greater => {
+                            let mut counter = current_indent_size - chars_read;
+                            while counter > 0 {
+                                counter -= ctx.indentation_size;
+                                toks.push(Token::Dedent);
+                                ctx.current_indent -= 1;
+                            }
+                        }
+                        Ordering::Less => {
+                            let mut counter = chars_read - current_indent_size;
+                            while counter > 0 {
+                                counter -= ctx.indentation_size;
+                                toks.push(Token::Indent);
+                                ctx.current_indent += 1;
+                            }
+                        }
+                        Ordering::Equal => (),
+                    }
+                }
+
+                Ok(Some((toks, count)))
             }
+            Some(_) | None => {
+                // Check for prev indent
+                if ctx.indentation_seen {
+                    for _ in 0..ctx.current_indent {
+                        toks.push(Token::Dedent);
+                    }
+                    ctx.current_indent = 0;
+                }
 
-            Ok((Token::Indent(chars_read / sample_size), chars_read))
-        } else {
-            let first_char = data[0];
-            let (_, chars_read) = Self::take_while(ctx, data, |ch| ch == first_char)?;
-            let indentation_type = if first_char == ' ' {
-                IndentationType::Space
-            } else {
-                IndentationType::Tab
-            };
-
-            ctx.indent_sample = Some((indentation_type, chars_read));
-            Ok((Token::Indent(1), chars_read))
+                if toks.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some((toks, count)))
+                }
+            }
         }
     }
 
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
     fn read_nodepath(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
         let next = match data[1..].first() {
             Some(&c) => c,
@@ -262,7 +372,8 @@ impl TokenReadUtils {
         }
     }
 
-    fn read_two_tokens(
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
+    fn read_compound_tokens(
         ctx: &TokenReaderContext,
         data: &[char],
     ) -> ParseResult<Option<(Token, usize)>> {
@@ -302,26 +413,42 @@ impl TokenReadUtils {
         Ok(Some((tok, 2)))
     }
 
-    fn read_single_token(
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
+    fn read_newline(ctx: &TokenReaderContext, data: &[char]) -> ParseResult<(Token, usize)> {
+        match (data.first(), data.get(1)) {
+            (Some('\r'), Some('\n')) => Ok((Token::NewLine(NewLine::CrLf), 2)),
+            (Some('\n'), _) => Ok((Token::NewLine(NewLine::Lf), 1)),
+            (_, _) => Err(Self::build_error(ctx, ParseError::UnexpectedEof)),
+        }
+    }
+
+    #[tracing::instrument(fields(data = %TokenView(data)), ret)]
+    fn read_next_tokens(
         ctx: &mut TokenReaderContext,
         data: &[char],
-    ) -> ParseResult<(Token, usize)> {
-        // Try two tokens
-        if let Some(tok) = Self::read_two_tokens(ctx, data)? {
-            return Ok(tok);
+    ) -> ParseResult<(Vec<Token>, usize)> {
+        // Try compound tokens
+        if let Some((tok, sz)) = Self::read_compound_tokens(ctx, data)? {
+            return Ok((vec![tok], sz));
+        }
+
+        // Detect indent
+        if let Some(Token::NewLine(_)) = ctx.previous_token {
+            if let Some((toks, count)) = Self::try_read_indent(ctx, data)? {
+                debug!(
+                    message = "read_next_tokens=>try_read_indent",
+                    read = ?count,
+                    first_char = ?data.first(),
+                    position = ?ctx.position()
+                );
+                return Ok((toks, count));
+            }
         }
 
         let next = match data.first() {
             Some(c) => c,
             None => return Err(Self::build_error(ctx, ParseError::UnexpectedEof)),
         };
-
-        // Try using previous token
-        #[allow(clippy::single_match)]
-        match (&ctx.previous_token, next) {
-            (Some(Token::LineFeed), ' ' | '\t') => return Self::read_indent(ctx, data),
-            _ => (),
-        }
 
         let (tok, length) = match next {
             '&' => (Token::Punct(Punct::Ampersand), 1),
@@ -348,22 +475,21 @@ impl TokenReadUtils {
             ';' => (Token::Punct(Punct::Semicolon), 1),
             '/' => (Token::Punct(Punct::Slash), 1),
             '~' => (Token::Punct(Punct::Tilde), 1),
-            '\n' => (Token::LineFeed, 1),
-            '\r' => (Token::CarriageReturn, 1),
+            '\n' | '\r' => Self::read_newline(ctx, data)?,
             '$' => Self::read_nodepath(ctx, data)?,
             '#' => Self::read_comment(ctx, data)?,
             '\'' | '"' => Self::read_string(ctx, data)?,
             '0'..='9' => Self::read_number(ctx, data)?,
             ' ' | '\t' => Self::read_whitespace(ctx, data)?,
-            &c if c.is_ascii_alphabetic() || c == '_' => Self::read_ident(ctx, data)?,
+            &c if c.is_ascii_alphabetic() || c == '_' => Self::read_identifier(ctx, data)?,
             &other => return Err(Self::build_error(ctx, ParseError::UnknownCharacter(other))),
         };
 
-        Ok((tok, length))
+        Ok((vec![tok], length))
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum IndentationType {
     Tab,
     Space,
@@ -393,37 +519,57 @@ impl TokenReader {
         }
     }
 
-    pub fn next_token(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<TokenSpan> {
+    pub fn next_tokens(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Vec<TokenSpan>> {
         if self.remaining_text.is_empty() {
-            Ok(TokenSpan {
-                token: Token::Eof,
-                start: self.cursor,
-                end: self.cursor,
-            })
-        } else {
+            let mut tokens = vec![];
+
+            // Handle newline with remaining indents
+            if let Some(Token::NewLine(_)) = ctx.previous_token {
+                for _ in 0..ctx.current_indent {
+                    tokens.push(Token::Dedent);
+                }
+            }
+
+            tokens.push(Token::Eof);
+
             let start = self.cursor;
-            let token = self._next_token(ctx)?;
             let end = self.cursor;
 
-            Ok(TokenSpan { token, start, end })
+            Ok(tokens
+                .into_iter()
+                .map(|token| TokenSpan { token, start, end })
+                .collect())
+        } else {
+            let start = self.cursor;
+            let tokens = self._next_tokens(ctx)?;
+            let end = self.cursor;
+
+            Ok(tokens
+                .into_iter()
+                .map(|token| TokenSpan { token, start, end })
+                .collect())
         }
     }
 
-    fn _next_token(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Token> {
-        let (tok, chars_read) = TokenReadUtils::read_single_token(ctx, &self.remaining_text)?;
+    fn _next_tokens(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Vec<Token>> {
+        let (toks, chars_read) = TokenReadUtils::read_next_tokens(ctx, &self.remaining_text)?;
         self._chomp(chars_read);
 
-        ctx.previous_token = Some(tok.clone());
+        if !toks.is_empty() {
+            ctx.previous_token = toks.last().cloned();
 
-        // Count lines and columns
-        if tok == Token::LineFeed {
-            ctx.lines_seen += 1;
-            ctx.cols_seen = 0;
+            // Count lines and columns
+            if toks.iter().any(|n| matches!(n, Token::NewLine(_))) {
+                ctx.lines_seen += 1;
+                ctx.cols_seen = 0;
+            } else {
+                ctx.cols_seen += chars_read;
+            }
         } else {
-            ctx.cols_seen += chars_read;
+            ctx.previous_token = None;
         }
 
-        Ok(tok)
+        Ok(toks)
     }
 
     fn _chomp(&mut self, num_bytes: usize) {
@@ -437,8 +583,8 @@ mod tests {
     use crate::{
         error::ParseResult,
         read::{TokenReadUtils, TokenReaderContext},
-        token::QuoteMode,
-        Token, Value,
+        token::{NewLine, QuoteMode},
+        IndentationType, Token, Value,
     };
 
     fn parser(
@@ -450,14 +596,31 @@ mod tests {
         }
     }
 
-    fn parser_ctx(
-        method: impl Fn(&mut TokenReaderContext, &[char]) -> ParseResult<(Token, usize)>,
-    ) -> impl Fn(&mut TokenReaderContext, &str) -> Token {
-        move |ctx, s| method(ctx, &s.chars().collect::<Vec<_>>()).unwrap().0
+    fn parser_indent(
+        method: impl Fn(&mut TokenReaderContext, &[char]) -> ParseResult<Option<(Vec<Token>, usize)>>,
+    ) -> impl Fn(&mut TokenReaderContext, &str) -> Option<Vec<Token>> {
+        move |ctx, s| {
+            method(ctx, &s.chars().collect::<Vec<_>>())
+                .unwrap()
+                .map(|(a, _)| a)
+        }
     }
 
     #[test]
-    fn test_read_string() {
+    fn newline() {
+        let run = |s: &str| {
+            let ctx = TokenReaderContext::default();
+            let data = s.chars().collect::<Vec<_>>();
+            TokenReadUtils::read_newline(&ctx, &data).map(|(t, _s)| t)
+        };
+
+        assert_eq!(run("\n").unwrap(), Token::NewLine(NewLine::Lf));
+        assert_eq!(run("\r\n").unwrap(), Token::NewLine(NewLine::CrLf));
+        assert!(run("e").is_err());
+    }
+
+    #[test]
+    fn string() {
         let run = parser(TokenReadUtils::read_string);
 
         assert_eq!(
@@ -479,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_comment() {
+    fn comment() {
         let run = parser(TokenReadUtils::read_comment);
 
         assert_eq!(run("# abcd"), Token::Comment(" abcd".into()));
@@ -487,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_number() {
+    fn number() {
         let run = parser(TokenReadUtils::read_number);
 
         assert_eq!(run("1234"), Token::Value(Value::Int(1234)));
@@ -496,51 +659,76 @@ mod tests {
     }
 
     #[test]
-    fn test_read_indent_4spaces() {
+    fn indent() {
         let mut ctx = TokenReaderContext::default();
-        let run = parser_ctx(TokenReadUtils::read_indent);
+        let run = parser_indent(TokenReadUtils::try_read_indent);
 
-        assert_eq!(run(&mut ctx, "    "), Token::Indent(1));
-        assert_eq!(run(&mut ctx, "        "), Token::Indent(2));
-        assert_eq!(run(&mut ctx, "            "), Token::Indent(3));
-        assert_eq!(run(&mut ctx, "    "), Token::Indent(1));
+        assert!(!ctx.indentation_seen);
+
+        assert_eq!(run(&mut ctx, "    "), Some(vec![Token::Indent]));
+        assert!(ctx.indentation_seen);
+        assert_eq!(ctx.current_indent, 1);
+        assert_eq!(ctx.indentation_type, IndentationType::Space);
+        assert_eq!(ctx.indentation_size, 4);
+
+        assert_eq!(run(&mut ctx, "    "), Some(vec![]));
+        assert_eq!(run(&mut ctx, "        "), Some(vec![Token::Indent]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(run(&mut ctx, "        "), Some(vec![]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(run(&mut ctx, "    "), Some(vec![Token::Dedent]));
+        assert_eq!(ctx.current_indent, 1);
+
+        assert_eq!(run(&mut ctx, "    "), Some(vec![]));
+        assert_eq!(ctx.current_indent, 1);
+
+        assert_eq!(run(&mut ctx, "        "), Some(vec![Token::Indent]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(run(&mut ctx, ""), Some(vec![Token::Dedent, Token::Dedent]));
+        assert_eq!(ctx.current_indent, 0);
     }
 
     #[test]
-    fn test_read_indent_2spaces() {
+    fn indent_with_code() {
         let mut ctx = TokenReaderContext::default();
-        let run = parser_ctx(TokenReadUtils::read_indent);
+        let run = parser_indent(TokenReadUtils::try_read_indent);
 
-        assert_eq!(run(&mut ctx, "  "), Token::Indent(1));
-        assert_eq!(run(&mut ctx, "    "), Token::Indent(2));
-        assert_eq!(run(&mut ctx, "      "), Token::Indent(3));
-        assert_eq!(run(&mut ctx, "  "), Token::Indent(1));
+        assert!(!ctx.indentation_seen);
+
+        assert_eq!(run(&mut ctx, "    if"), Some(vec![Token::Indent]));
+        assert!(ctx.indentation_seen);
+        assert_eq!(ctx.current_indent, 1);
+        assert_eq!(ctx.indentation_type, IndentationType::Space);
+        assert_eq!(ctx.indentation_size, 4);
+
+        assert_eq!(run(&mut ctx, "    if"), Some(vec![]));
+        assert_eq!(run(&mut ctx, "        if"), Some(vec![Token::Indent]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(run(&mut ctx, "        if"), Some(vec![]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(run(&mut ctx, "    if"), Some(vec![Token::Dedent]));
+        assert_eq!(ctx.current_indent, 1);
+
+        assert_eq!(run(&mut ctx, "    if"), Some(vec![]));
+        assert_eq!(ctx.current_indent, 1);
+
+        assert_eq!(run(&mut ctx, "        if"), Some(vec![Token::Indent]));
+        assert_eq!(ctx.current_indent, 2);
+
+        assert_eq!(
+            run(&mut ctx, "if"),
+            Some(vec![Token::Dedent, Token::Dedent])
+        );
+        assert_eq!(ctx.current_indent, 0);
     }
 
     #[test]
-    fn test_read_indent_1tab() {
-        let mut ctx = TokenReaderContext::default();
-        let run = parser_ctx(TokenReadUtils::read_indent);
-
-        assert_eq!(run(&mut ctx, "\t"), Token::Indent(1));
-        assert_eq!(run(&mut ctx, "\t\t"), Token::Indent(2));
-        assert_eq!(run(&mut ctx, "\t\t\t"), Token::Indent(3));
-        assert_eq!(run(&mut ctx, "\t"), Token::Indent(1));
-    }
-
-    #[test]
-    fn test_read_indent_2tabs() {
-        let mut ctx = TokenReaderContext::default();
-        let run = parser_ctx(TokenReadUtils::read_indent);
-
-        assert_eq!(run(&mut ctx, "\t\t"), Token::Indent(1));
-        assert_eq!(run(&mut ctx, "\t\t\t\t"), Token::Indent(2));
-        assert_eq!(run(&mut ctx, "\t\t\t\t\t\t"), Token::Indent(3));
-        assert_eq!(run(&mut ctx, "\t\t"), Token::Indent(1));
-    }
-
-    #[test]
-    fn test_read_nodepath() {
+    fn nodepath() {
         let run = parser(TokenReadUtils::read_nodepath);
 
         assert_eq!(run("$A/B/C"), Token::NodePath("A/B/C".into(), None));

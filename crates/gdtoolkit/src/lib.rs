@@ -1,11 +1,14 @@
 mod args;
 mod commands;
+pub(crate) mod utils;
 
 use std::borrow::Cow;
 
 use args::Args;
 use clap::Parser;
 use color_eyre::Result;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_tree::HierarchicalLayer;
 
 pub struct CommandStatus {
     message: Option<String>,
@@ -45,7 +48,15 @@ impl CommandStatus {
 
 pub fn run_cmdline() -> Result<CommandStatus> {
     color_eyre::install()?;
-    tracing_subscriber::fmt::init();
+
+    let env_layer = EnvFilter::from_default_env();
+    let subscriber = Registry::default().with(env_layer).with(
+        HierarchicalLayer::new(2)
+            .with_bracketed_fields(true)
+            .with_targets(true),
+    );
+
+    tracing::subscriber::set_global_default(subscriber).ok();
 
     let args: Args = Parser::parse();
     commands::handle_command(args.command)

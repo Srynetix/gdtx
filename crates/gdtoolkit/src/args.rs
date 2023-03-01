@@ -12,6 +12,7 @@ pub struct Args {
 #[derive(Debug, Parser)]
 pub enum MainSubcommand {
     Fmt(FmtCommand),
+    Debug(DebugCommand),
 }
 
 /// Auto-format GDScript code
@@ -28,4 +29,45 @@ pub struct FmtCommand {
     /// File pattern to ignore
     #[arg(short, long)]
     pub ignore: Option<String>,
+}
+
+/// Misc. debug commands
+#[derive(Debug, Parser)]
+pub struct DebugCommand {
+    #[command(subcommand)]
+    pub debug_command: DebugSubcommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum DebugSubcommand {
+    CodeToLex(CodeToLexCommand),
+    LexToCode(LexToCodeCommand),
+    CodeToAst(CodeToAstCommand),
+}
+
+/// Convert GDScript code to lex output
+#[derive(Debug, Parser)]
+pub struct CodeToLexCommand {
+    /// Input path
+    pub input: PathBuf,
+    /// Output path (or stdout if missing)
+    pub output: Option<PathBuf>,
+}
+
+/// Convert lex output to GDScript code
+#[derive(Debug, Parser)]
+pub struct LexToCodeCommand {
+    /// Input path
+    pub input: PathBuf,
+    /// Output path (or stdout if missing)
+    pub output: Option<PathBuf>,
+}
+
+/// Convert GDScript code to AST output
+#[derive(Debug, Parser)]
+pub struct CodeToAstCommand {
+    /// Input path
+    pub input: PathBuf,
+    /// Output path (or stdout if missing)
+    pub output: Option<PathBuf>,
 }

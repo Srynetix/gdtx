@@ -1,7 +1,9 @@
 use std::{borrow::Cow, io::Write};
+use tracing::debug;
 
 use gdtoolkit_gdscript_lexer::{
-    Keyword, Operator, Punct, QuoteMode, Token, TokenReaderContext, Value,
+    GdScriptLexerOutput, IndentationType, Keyword, NewLine, Operator, Punct, QuoteMode, Token,
+    Value,
 };
 
 #[derive(Default)]
@@ -10,16 +12,101 @@ pub struct GdScriptWriter;
 #[derive(Default)]
 pub struct TokenWriter;
 
+#[derive(Debug)]
+pub struct GdScriptWriterContext {
+    pub indentation_type: IndentationType,
+    pub indentation_size: usize,
+}
+
+impl From<&GdScriptLexerOutput> for GdScriptWriterContext {
+    fn from(value: &GdScriptLexerOutput) -> Self {
+        let ctx = value.context();
+
+        Self {
+            indentation_size: ctx.indentation_size,
+            indentation_type: ctx.indentation_type,
+        }
+    }
+}
+
 impl GdScriptWriter {
     pub fn write_tokens<W: Write>(
         &self,
-        ctx: &TokenReaderContext,
+        ctx: &GdScriptWriterContext,
         writer: &mut W,
         tokens: Vec<Token>,
     ) -> std::io::Result<()> {
         let token_writer = TokenWriter::default();
-        for token in tokens {
-            write!(writer, "{}", token_writer.token_to_string(ctx, token))?;
+        let mut current_indent = 0;
+        let mut should_write_newline_before = false;
+        let mut should_write_newline_after = false;
+
+        for window in tokens.windows(2) {
+            let token1 = &window[0];
+            let token2 = &window[1];
+
+            match (token1, token2) {
+                (Token::Indent, Token::Indent) => {
+                    current_indent += 1;
+                }
+                (Token::Indent, _) => {
+                    current_indent += 1;
+                    debug!(message = "should_write_newline_before", current_indent = current_indent, token1 = ?token1, token2 = ?token2);
+                    should_write_newline_before = true;
+                }
+                (Token::Dedent, t) if !matches!(t, Token::Indent | Token::Dedent) => {
+                    current_indent -= 1;
+                    if current_indent > 0 {
+                        debug!(message = "should_write_newline_after", current_indent = current_indent, token1 = ?token1, token2 = ?token2);
+                        should_write_newline_after = true;
+                    }
+                }
+                (Token::Dedent, _) => {
+                    current_indent -= 1;
+                }
+                (Token::NewLine(_), t)
+                    if !matches!(t, Token::Indent | Token::Dedent | Token::Eof) =>
+                {
+                    // Write indent
+                    if current_indent > 0 {
+                        debug!(message = "should_write_newline_after", current_indent = current_indent, token1 = ?token1, token2 = ?token2);
+                        should_write_newline_after = true;
+                    }
+                }
+                (_, _) => (),
+            }
+
+            if should_write_newline_before {
+                self.write_indent(ctx, writer, current_indent)?;
+                should_write_newline_before = false;
+            }
+
+            write!(writer, "{}", token_writer.token_to_string(token1.clone()))?;
+
+            if should_write_newline_after {
+                self.write_indent(ctx, writer, current_indent)?;
+                should_write_newline_after = false;
+            }
+        }
+
+        write!(
+            writer,
+            "{}",
+            token_writer.token_to_string(tokens.last().cloned().unwrap())
+        )?;
+
+        Ok(())
+    }
+
+    pub fn write_indent<W: Write>(
+        &self,
+        ctx: &GdScriptWriterContext,
+        writer: &mut W,
+        count: usize,
+    ) -> std::io::Result<()> {
+        let char_to_write = ctx.indentation_type.as_char();
+        for _ in 0..count * ctx.indentation_size {
+            write!(writer, "{}", char_to_write)?;
         }
 
         Ok(())
@@ -27,18 +114,13 @@ impl GdScriptWriter {
 }
 
 impl TokenWriter {
-    pub fn token_to_string(&self, ctx: &TokenReaderContext, token: Token) -> Cow<str> {
+    pub fn token_to_string(&self, token: Token) -> Cow<str> {
         match token {
-            Token::CarriageReturn => Cow::Borrowed("\r"),
             Token::Comment(comment) => Cow::Owned(format!("#{comment}")),
+            Token::Dedent => Cow::Borrowed(""),
             Token::Eof => Cow::Borrowed(""),
-            Token::Ident(ident) => Cow::Owned(ident),
-            Token::Indent(count) => {
-                let (indent_type, indent_size) = ctx.indent_sample.unwrap();
-                let char_to_copy = indent_type.as_char();
-                let repeated = [char_to_copy].repeat(indent_size * count);
-                Cow::Owned(repeated.into_iter().collect())
-            }
+            Token::Identifier(ident) => Cow::Owned(ident),
+            Token::Indent => Cow::Borrowed(""),
             Token::Keyword(k) => match k {
                 Keyword::And => Cow::Borrowed("and"),
                 Keyword::Assert => Cow::Borrowed("assert"),
@@ -83,7 +165,10 @@ impl TokenWriter {
                 Keyword::While => Cow::Borrowed("while"),
                 Keyword::Yield => Cow::Borrowed("yield"),
             },
-            Token::LineFeed => Cow::Borrowed("\n"),
+            Token::NewLine(nl) => match nl {
+                NewLine::Lf => Cow::Borrowed("\n"),
+                NewLine::CrLf => Cow::Borrowed("\r\n"),
+            },
             Token::NodePath(s, mode) => match mode {
                 None => Cow::Owned(format!("${s}")),
                 Some(QuoteMode::Single) => Cow::Owned(format!("$'{s}'")),
@@ -159,22 +244,21 @@ impl TokenWriter {
 #[cfg(test)]
 mod tests {
     use gdtoolkit_gdscript_lexer::GdScriptLexer;
-    use indoc::indoc;
+    use tracing::debug;
 
-    use super::GdScriptWriter;
+    use super::{GdScriptWriter, GdScriptWriterContext};
 
     fn assert_format_same(source: &str) {
         let writer = GdScriptWriter::default();
         let lexer = GdScriptLexer::default();
         let lexer_output = lexer.lex(source).unwrap();
+        debug!(message = "lexer_output", lexer_output = ?lexer_output.tokens());
+
+        let ctx = GdScriptWriterContext::from(&lexer_output);
 
         let mut write_output: Vec<u8> = Vec::new();
         writer
-            .write_tokens(
-                lexer_output.context(),
-                &mut write_output,
-                lexer_output.tokens(),
-            )
+            .write_tokens(&ctx, &mut write_output, lexer_output.tokens())
             .unwrap();
         let write_output = String::from_utf8(write_output).unwrap();
 
@@ -188,16 +272,44 @@ mod tests {
 
     #[test]
     fn test_script() {
-        assert_format_same(indoc! {r#"
-            # Sample
-            extends Object
-            class_name Hello
+        assert_format_same(
+            &[
+                "# Sample",
+                "extends Object",
+                "class_name Hello",
+                "",
+                "static func sample(a: int) -> void:",
+                "    print(\"Hello !\")",
+                "",
+                "func _a():",
+                "    pass",
+            ]
+            .join("\r\n"),
+        );
+    }
 
-            static func sample(a: int) -> void:
-                print("Hello !")
+    #[test]
+    #[rustfmt::skip]
+    fn test_script_newline() {
+        assert_format_same(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "",
+            "        pass"
+        ].join("\r\n"));
+    }
 
-            func _a():
-                pass
-        "#});
+    #[test]
+    #[rustfmt::skip]
+    fn test_script_newline_2() {
+        assert_format_same(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "",
+            "        pass",
+            "    ",
+        ].join("\n"))
     }
 }

@@ -1,3 +1,3 @@
 mod writer;
 
-pub use writer::GdScriptWriter;
+pub use writer::{GdScriptWriter, GdScriptWriterContext};

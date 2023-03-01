@@ -1,4 +1,4 @@
-use crate::token::QuoteMode;
+use crate::token::{NewLine, QuoteMode};
 
 use super::*;
 use pretty_assertions::assert_eq;
@@ -28,26 +28,22 @@ fn tok_op(value: Operator) -> Token {
 }
 
 fn tok_ident(value: &str) -> Token {
-    Token::Ident(value.into())
-}
-
-fn tok_indent(size: usize) -> Token {
-    Token::Indent(size)
+    Token::Identifier(value.into())
 }
 
 fn tok_punct(value: Punct) -> Token {
     Token::Punct(value)
 }
 
-fn lex_tokens(text: &str) -> Vec<Token> {
-    let output = GdScriptLexer::default().lex(text).unwrap();
+fn lex_tokens(values: &[&'static str]) -> Vec<Token> {
+    let output = GdScriptLexer::default().lex(&values.join("\n")).unwrap();
     output.tokens()
 }
 
 #[test]
-fn test_expr_1() {
+fn expr_1() {
     assert_eq!(
-        lex_tokens("1 += 1abcd + (a * 2) && 5 & 1"),
+        lex_tokens(&["1 += 1abcd + (a * 2) && 5 & 1"]),
         vec![
             tok_int(1),
             tok_ws(" "),
@@ -79,9 +75,9 @@ fn test_expr_1() {
 }
 
 #[test]
-fn test_bool() {
+fn bool() {
     assert_eq!(
-        lex_tokens("pouet = true and false || true"),
+        lex_tokens(&["pouet = true and false || true"]),
         vec![
             tok_ident("pouet"),
             tok_ws(" "),
@@ -102,9 +98,13 @@ fn test_bool() {
 }
 
 #[test]
-fn test_func() {
+#[rustfmt::skip]
+fn func() {
     assert_eq!(
-        lex_tokens("static func dummy(a: int) -> void:\n    pass"),
+        lex_tokens(&[
+            "static func dummy(a: int) -> void:",
+            "    pass"
+        ]),
         vec![
             tok_kw(Keyword::Static),
             tok_ws(" "),
@@ -122,8 +122,8 @@ fn test_func() {
             tok_ws(" "),
             tok_ident("void"),
             tok_punct(Punct::Colon),
-            Token::LineFeed,
-            tok_indent(1),
+            Token::NewLine(NewLine::Lf),
+            Token::Indent,
             tok_kw(Keyword::Pass),
             Token::Eof
         ]
@@ -131,11 +131,353 @@ fn test_func() {
 }
 
 #[test]
-fn test_strings() {
+#[rustfmt::skip]
+fn indents() {
     assert_eq!(
-        lex_tokens(
-            "var output = \"\"\nvar new_prefix := \"   \" if last else \" │ \"\noutput += 1"
-        ),
+        lex_tokens(&[
+            "if hello:",
+            "    if hi:",
+            "        pass",
+            "        pass",
+            "print('Hey!')"
+        ]),
+        vec![
+            tok_kw(Keyword::If),
+            tok_ws(" "),
+            tok_ident("hello"),
+            tok_punct(Punct::Colon),
+            Token::NewLine(NewLine::Lf),
+            Token::Indent,
+            tok_kw(Keyword::If),
+            tok_ws(" "),
+            tok_ident("hi"),
+            tok_punct(Punct::Colon),
+            Token::NewLine(NewLine::Lf),
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            Token::Dedent,
+            Token::Dedent,
+            tok_ident("print"),
+            tok_punct(Punct::OpenParens),
+            Token::Value(Value::String("Hey!".into(), QuoteMode::Single)),
+            tok_punct(Punct::ClosedParens),
+            Token::Eof
+        ]
+    );
+
+    assert_eq!(
+        lex_tokens(&[
+            "if hello:",
+            "    if hi:",
+            "        pass",
+            "    pass",
+            "    if a:",
+            "        pass",
+            "    pass",
+            "pass"
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::If),
+            tok_ws(" "),
+            tok_ident("hello"),
+            tok_punct(Punct::Colon),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::If),
+            tok_ws(" "),
+            tok_ident("hi"),
+            tok_punct(Punct::Colon),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Dedent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            tok_kw(Keyword::If),
+            tok_ws(" "),
+            tok_ident("a"),
+            tok_punct(Punct::Colon),
+            Token::NewLine(NewLine::Lf),
+            // Line 6
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 7
+            Token::Dedent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 8
+            Token::Dedent,
+            tok_kw(Keyword::Pass),
+            Token::Eof
+        ]
+    );
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_2() {
+    // Special case: multiple dedents
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "            pass",
+            "    pass",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            Token::Dedent,
+            Token::Dedent,
+            tok_kw(Keyword::Pass),
+            // End
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline() {
+    // Special case: multiple dedents
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "    ",
+            "pass"
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Dedent,
+            tok_kw(Keyword::Pass),
+            // End
+            Token::Eof
+        ]
+    );
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline_2() {
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "",
+            "pass",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Dedent,
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            tok_kw(Keyword::Pass),
+            // End
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline_3() {
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "    ",
+            "    ",
+            "    pass",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            tok_kw(Keyword::Pass),
+            // End
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline_4() {
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "",
+            "        pass",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Dedent,
+            Token::Dedent,
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            Token::Indent,
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            // End
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline_5() {
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "",
+            "        pass",
+            "    ",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Dedent,
+            Token::Dedent,
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            Token::Indent,
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 6
+            Token::Dedent,
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn indents_on_newline_6() {
+    assert_eq!(
+        lex_tokens(&[
+            "pass",
+            "    pass",
+            "        pass",
+            "",
+            "        pass",
+            "",
+        ]),
+        vec![
+            // Line 1
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 2
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 3
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 4
+            Token::Dedent,
+            Token::Dedent,
+            Token::NewLine(NewLine::Lf),
+            // Line 5
+            Token::Indent,
+            Token::Indent,
+            tok_kw(Keyword::Pass),
+            Token::NewLine(NewLine::Lf),
+            // Line 6
+            Token::Dedent,
+            Token::Dedent,
+            Token::Eof
+        ]
+    )
+}
+
+#[test]
+#[rustfmt::skip]
+fn strings() {
+    assert_eq!(
+        lex_tokens(&[
+            "var output = \"\"",
+            "var new_prefix := \"   \" if last else \" │ \"",
+            "output += 1",
+        ]),
         vec![
             tok_kw(Keyword::Var),
             tok_ws(" "),
@@ -144,7 +486,7 @@ fn test_strings() {
             tok_punct(Punct::Eq),
             tok_ws(" "),
             tok_dqstr(""),
-            Token::LineFeed,
+            Token::NewLine(NewLine::Lf),
             tok_kw(Keyword::Var),
             tok_ws(" "),
             tok_ident("new_prefix"),
@@ -160,7 +502,7 @@ fn test_strings() {
             tok_kw(Keyword::Else),
             tok_ws(" "),
             tok_dqstr(" │ "),
-            Token::LineFeed,
+            Token::NewLine(NewLine::Lf),
             tok_ident("output"),
             tok_ws(" "),
             tok_op(Operator::AddAssign),
@@ -172,8 +514,8 @@ fn test_strings() {
 }
 
 #[test]
-fn test_sample_1() {
-    let res = lex_tokens(include_str!("./samples/sample01.gd"));
+fn sample_1() {
+    let res = lex_tokens(&[include_str!("./samples/sample01.gd")]);
     assert!(!res.is_empty());
 
     println!("{:#?}", res);

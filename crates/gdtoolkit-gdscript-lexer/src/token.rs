@@ -1,15 +1,41 @@
+use serde::{Deserialize, Serialize};
+
 pub type IntType = i64;
 pub type FloatType = f64;
 
-#[derive(Debug, PartialEq, Clone)]
+pub struct CompactTokenView<'a>(pub &'a Token);
+
+impl<'a> std::fmt::Display for CompactTokenView<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Token::Comment(c) => f.write_fmt(format_args!("# {}", c)),
+            Token::Dedent => f.write_str("<DDT>"),
+            Token::Eof => f.write_str("<EOF>"),
+            Token::Identifier(i) => f.write_fmt(format_args!("Id({:?})", i)),
+            Token::Indent => f.write_str("<IDT>"),
+            Token::Keyword(kw) => f.write_fmt(format_args!("Kw({:?})", kw)),
+            Token::NewLine(t) => match t {
+                NewLine::CrLf => f.write_str("<CRLF>"),
+                NewLine::Lf => f.write_str("<LF>"),
+            },
+            Token::NodePath(p, q) => f.write_fmt(format_args!("P({}, {:?})", p, q)),
+            Token::Operator(op) => f.write_fmt(format_args!("Op({:?})", op)),
+            Token::Punct(p) => f.write_fmt(format_args!("Pt({:?})", p)),
+            Token::Value(v) => f.write_fmt(format_args!("V({:?})", v)),
+            Token::Whitespace(w) => f.write_fmt(format_args!("W({})", w)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Token {
-    CarriageReturn,
     Comment(String),
+    Dedent,
     Eof,
-    Ident(String),
-    Indent(usize),
+    Identifier(String),
+    Indent,
     Keyword(Keyword),
-    LineFeed,
+    NewLine(NewLine),
     NodePath(String, Option<QuoteMode>),
     Operator(Operator),
     Punct(Punct),
@@ -17,13 +43,19 @@ pub enum Token {
     Whitespace(String),
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+pub enum NewLine {
+    CrLf,
+    Lf,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum QuoteMode {
     Single,
     Double,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Operator {
     AddAssign,
     AndAssign,
@@ -46,7 +78,7 @@ pub enum Operator {
     XorAssign,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Punct {
     Ampersand,
     Asterisk,
@@ -74,7 +106,7 @@ pub enum Punct {
     Tilde,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Value {
     Boolean(bool),
     String(String, QuoteMode),
@@ -82,7 +114,7 @@ pub enum Value {
     Int(IntType),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct FloatRepr(String);
 
 impl From<String> for FloatRepr {
@@ -109,7 +141,7 @@ impl FloatRepr {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Keyword {
     And,
     Assert,

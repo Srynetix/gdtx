@@ -4,25 +4,21 @@ use std::{
 };
 
 use color_eyre::{eyre::Context, Result};
-use gdtoolkit_gdscript_formatter::GdScriptWriter;
+use gdtoolkit_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
 use gdtoolkit_gdscript_lexer::GdScriptLexer;
 use owo_colors::OwoColorize;
 use walkdir::WalkDir;
 
-use crate::{args::FmtCommand, CommandStatus};
+use crate::{
+    args::FmtCommand,
+    utils::diff::{check_string_differences, Diff},
+    CommandStatus,
+};
 
 #[derive(Debug)]
 pub enum FormatCheckOutput {
     Success(PathBuf),
-    Error(PathBuf, FormatCheckErrorSpan),
-}
-
-#[derive(Debug)]
-pub struct FormatCheckErrorSpan {
-    source_char: char,
-    output_char: char,
-    line: usize,
-    col: usize,
+    Error(PathBuf, Diff),
 }
 
 pub fn handle_fmt_command(cmd: FmtCommand) -> Result<CommandStatus> {
@@ -60,14 +56,11 @@ fn handle_format_check(cmd: FmtCommand) -> Result<CommandStatus> {
                     format!("{} ok", p.as_os_str().to_string_lossy()).black()
                 );
             }
-            FormatCheckOutput::Error(p, span) => {
+            FormatCheckOutput::Error(p, diff) => {
                 eprintln!(
-                    "Error while formatting '{}': {:?} != {:?} (line {}, col {})",
+                    "Error while formatting '{}'\n\n{}",
                     p.as_os_str().to_string_lossy(),
-                    span.source_char,
-                    span.output_char,
-                    span.line,
-                    span.col
+                    diff.render_to_string()
                 );
                 errors_found = true;
             }
@@ -86,12 +79,10 @@ fn handle_format_check(cmd: FmtCommand) -> Result<CommandStatus> {
 
 fn generate_format_on_input(input_content: &str) -> Result<String> {
     let lexer_output = GdScriptLexer::default().lex(input_content)?;
+    let ctx = GdScriptWriterContext::from(&lexer_output);
+
     let mut buffer = Vec::<u8>::new();
-    GdScriptWriter::default().write_tokens(
-        lexer_output.context(),
-        &mut buffer,
-        lexer_output.tokens(),
-    )?;
+    GdScriptWriter::default().write_tokens(&ctx, &mut buffer, lexer_output.tokens())?;
 
     let s = String::from_utf8(buffer)?;
     Ok(s)
@@ -106,8 +97,8 @@ fn check_format_for_file(path: &Path) -> Result<FormatCheckOutput> {
         )
     })?;
 
-    if let Some(span) = check_string_differences(&input_content, &output_string) {
-        Ok(FormatCheckOutput::Error(path.into(), span))
+    if let Some(diff) = check_string_differences(&input_content, &output_string) {
+        Ok(FormatCheckOutput::Error(path.into(), diff))
     } else {
         Ok(FormatCheckOutput::Success(path.into()))
     }
@@ -143,36 +134,4 @@ fn walk_dir(dir: &Path, ignore: Option<String>) -> Vec<PathBuf> {
     } else {
         vec![dir.to_owned()]
     }
-}
-
-fn check_string_differences(source: &str, output: &str) -> Option<FormatCheckErrorSpan> {
-    if source == output {
-        return None;
-    }
-
-    // Let's diff!
-    let mut line = 0;
-    let mut col = 0;
-    let mut source_chars = source.chars();
-    let mut output_chars = output.chars();
-
-    while let (Some(source_char), Some(output_char)) = (source_chars.next(), output_chars.next()) {
-        if source_char != output_char {
-            return Some(FormatCheckErrorSpan {
-                source_char,
-                output_char,
-                line,
-                col,
-            });
-        }
-
-        if source_char == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-
-    unreachable!()
 }

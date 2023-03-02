@@ -7,7 +7,9 @@ use crate::{
 
 use color_eyre::{eyre::eyre, Result};
 use gdtoolkit_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
-use gdtoolkit_gdscript_lexer::{GdScriptLexer, LexerOutputFormat, LexerOutputSerializer};
+use gdtoolkit_gdscript_lexer::{
+    GdScriptLexer, GdScriptLexerOutputFormat, GdScriptLexerOutputSerializer,
+};
 use gdtoolkit_gdscript_parser::{GdClassFormat, GdClassSerializer, GdScriptParser};
 
 pub fn handle_debug_command(cmd: DebugCommand) -> Result<CommandStatus> {
@@ -24,8 +26,8 @@ pub fn handle_code_to_lex_command(cmd: CodeToLexCommand) -> Result<CommandStatus
     let lexer_output = GdScriptLexer::default().lex(&input_content)?;
 
     let mut buffer = Vec::<u8>::new();
-    let lex_fmt_output = LexerOutputFormat::from(&lexer_output);
-    let lex_fmt_output_serializer = LexerOutputSerializer::default();
+    let lex_fmt_output = GdScriptLexerOutputFormat::from(&lexer_output);
+    let lex_fmt_output_serializer = GdScriptLexerOutputSerializer::default();
     lex_fmt_output_serializer.serialize(lex_fmt_output, &mut buffer)?;
 
     write_buffer_to_output(buffer, cmd.output.as_deref())?;
@@ -35,7 +37,7 @@ pub fn handle_code_to_lex_command(cmd: CodeToLexCommand) -> Result<CommandStatus
 pub fn handle_lex_to_code_command(cmd: LexToCodeCommand) -> Result<CommandStatus> {
     let input_file = validate_file(&cmd.input)?;
     let input_content = std::fs::File::open(input_file)?;
-    let lex_fmt_output_serializer = LexerOutputSerializer::default();
+    let lex_fmt_output_serializer = GdScriptLexerOutputSerializer::default();
     let lex_fmt_output = lex_fmt_output_serializer.deserialize(input_content)?;
 
     let ctx = GdScriptWriterContext {

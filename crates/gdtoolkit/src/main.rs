@@ -1,3 +1,5 @@
+//! gdtoolkit CLI utility
+
 #![deny(missing_docs)]
 
 use color_eyre::Result;

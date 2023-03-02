@@ -83,9 +83,9 @@ impl Default for TokenReaderContext {
     }
 }
 
-struct TokenReadUtils;
+struct TokenReadMethods;
 
-impl TokenReadUtils {
+impl TokenReadMethods {
     fn build_error(ctx: &TokenReaderContext, e: ParseError) -> (ParseError, ErrorContext) {
         (
             e,
@@ -546,7 +546,7 @@ impl TokenReader {
     }
 
     fn _next_tokens(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Vec<Token>> {
-        let (toks, chars_read) = TokenReadUtils::read_next_tokens(ctx, &self.remaining_text)?;
+        let (toks, chars_read) = TokenReadMethods::read_next_tokens(ctx, &self.remaining_text)?;
         self._chomp(chars_read);
 
         if !toks.is_empty() {
@@ -576,7 +576,7 @@ impl TokenReader {
 mod tests {
     use crate::{
         error::ParseResult,
-        read::{TokenReadUtils, TokenReaderContext},
+        read::{TokenReadMethods, TokenReaderContext},
         token::{IndentationType, NewLine, QuoteMode},
         Token, Value,
     };
@@ -605,7 +605,7 @@ mod tests {
         let run = |s: &str| {
             let ctx = TokenReaderContext::default();
             let data = s.chars().collect::<Vec<_>>();
-            TokenReadUtils::read_newline(&ctx, &data).map(|(t, _s)| t)
+            TokenReadMethods::read_newline(&ctx, &data).map(|(t, _s)| t)
         };
 
         assert_eq!(run("\n").unwrap(), Token::NewLine(NewLine::Lf));
@@ -615,7 +615,7 @@ mod tests {
 
     #[test]
     fn string() {
-        let run = parser(TokenReadUtils::read_string);
+        let run = parser(TokenReadMethods::read_string);
 
         assert_eq!(
             run("'abcd'"),
@@ -637,7 +637,7 @@ mod tests {
 
     #[test]
     fn comment() {
-        let run = parser(TokenReadUtils::read_comment);
+        let run = parser(TokenReadMethods::read_comment);
 
         assert_eq!(run("# abcd"), Token::Comment(" abcd".into()));
         assert_eq!(run("#abcd"), Token::Comment("abcd".into()));
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn number() {
-        let run = parser(TokenReadUtils::read_number);
+        let run = parser(TokenReadMethods::read_number);
 
         assert_eq!(run("1234"), Token::Value(Value::Int(1234)));
         assert_eq!(run("1234.0"), Token::Value(Value::Float("1234.0".into())));
@@ -655,7 +655,7 @@ mod tests {
     #[test]
     fn indent() {
         let mut ctx = TokenReaderContext::default();
-        let run = parser_indent(TokenReadUtils::try_read_indent);
+        let run = parser_indent(TokenReadMethods::try_read_indent);
 
         assert!(!ctx.indentation_seen);
 
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn indent_with_code() {
         let mut ctx = TokenReaderContext::default();
-        let run = parser_indent(TokenReadUtils::try_read_indent);
+        let run = parser_indent(TokenReadMethods::try_read_indent);
 
         assert!(!ctx.indentation_seen);
 
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn nodepath() {
-        let run = parser(TokenReadUtils::read_nodepath);
+        let run = parser(TokenReadMethods::read_nodepath);
 
         assert_eq!(run("$A/B/C"), Token::NodePath("A/B/C".into(), None));
         assert_eq!(

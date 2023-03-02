@@ -2,6 +2,7 @@
 
 #![deny(missing_docs)]
 
+mod debug;
 mod error;
 mod lexer;
 mod read;
@@ -11,11 +12,11 @@ mod token;
 #[cfg(test)]
 mod tests;
 
+pub use debug::CompactTokenView;
 pub use error::{Error, Result};
 pub use lexer::{GdScriptLexer, GdScriptLexerOutput};
 pub use read::TokenReaderContext;
-pub use serializer::{LexerOutputFormat, LexerOutputSerializer};
+pub use serializer::{GdScriptLexerOutputFormat, GdScriptLexerOutputSerializer};
 pub use token::{
-    CompactTokenView, FloatType, IndentationType, IntType, Keyword, NewLine, Operator, Punct,
-    QuoteMode, Token, Value,
+    FloatType, IndentationType, IntType, Keyword, NewLine, Operator, Punct, QuoteMode, Token, Value,
 };

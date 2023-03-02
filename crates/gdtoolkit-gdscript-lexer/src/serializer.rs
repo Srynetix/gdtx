@@ -5,11 +5,11 @@ use crate::{lexer::GdScriptLexerOutput, IndentationType, Token};
 
 /// Lexer output serializer.
 #[derive(Default)]
-pub struct LexerOutputSerializer;
+pub struct GdScriptLexerOutputSerializer;
 
 /// Lexer output format.
 #[derive(Serialize, Deserialize)]
-pub struct LexerOutputFormat {
+pub struct GdScriptLexerOutputFormat {
     /// Version.
     pub version: String,
     /// Indentation type.
@@ -20,7 +20,7 @@ pub struct LexerOutputFormat {
     pub tokens: Vec<Token>,
 }
 
-impl From<&GdScriptLexerOutput> for LexerOutputFormat {
+impl From<&GdScriptLexerOutput> for GdScriptLexerOutputFormat {
     fn from(value: &GdScriptLexerOutput) -> Self {
         let ctx = value.context();
 
@@ -33,14 +33,18 @@ impl From<&GdScriptLexerOutput> for LexerOutputFormat {
     }
 }
 
-impl LexerOutputSerializer {
+impl GdScriptLexerOutputSerializer {
     /// Serialize data.
-    pub fn serialize<W: Write>(&self, data: LexerOutputFormat, writer: W) -> Result<(), Error> {
+    pub fn serialize<W: Write>(
+        &self,
+        data: GdScriptLexerOutputFormat,
+        writer: W,
+    ) -> Result<(), Error> {
         serde_json::to_writer_pretty(writer, &data).map_err(|e| Error::new(ErrorKind::Other, e))
     }
 
     /// Deserialize data.
-    pub fn deserialize<R: Read>(&self, reader: R) -> Result<LexerOutputFormat, Error> {
+    pub fn deserialize<R: Read>(&self, reader: R) -> Result<GdScriptLexerOutputFormat, Error> {
         serde_json::from_reader(reader).map_err(|e| Error::new(ErrorKind::Other, e))
     }
 }

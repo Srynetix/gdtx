@@ -53,21 +53,6 @@ pub struct GdClass {
     decls: Vec<GdDecl>,
 }
 
-#[derive(Debug)]
-pub struct GdArgument {
-    name: GdIdentifier,
-    gd_type: GdType,
-    default_value: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct GdFunction {
-    is_static: bool,
-    name: GdIdentifier,
-    arguments: Vec<GdArgument>,
-    return_type: Option<GdType>,
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum GdAstNode {
     Value(GdValue),

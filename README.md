@@ -2,6 +2,8 @@
 
 Welcome on the `gdtoolkit` project!
 
+- [Documentation](./docs)
+
 ## Motivation
 
 While developing games with [Godot], I use [GDScript], since it's the most recommended language, and it integrates really well in the game development workflow.  
@@ -25,11 +27,11 @@ One last thing, I want to do everything in [Rust].
 
 ## How ?
 
-To do what I want, I need a GDScript parser.
+To do what I want, I need a [GDScript] parser and a "Godot project file" parser.
 
 In the past, I tried to modify the [Godot] game engine a little so it could expose code lint capabilities through the command-line, but it was harder than I expected, and made me go back in time seeing C++ everywhere (I was a big fan before, in the C++11/14 era.).  
 
-So like in a "Compilers 101" course, I need to divide the work in two steps:
+So like in a "Compilers 101" course, I need to divide the work in two steps for each target language:
 
 - The **lexer**: reads source code, emits "tokens"
 - The **parser**: reads "tokens", emits nodes in an AST (Abstract Source Tree)
@@ -41,15 +43,21 @@ When that's done, I need two more steps:
 
 Then, everything can be glued together in a command-line utility and tada :tada:!
 
+To configure the tools, instead of using a specific configuration file, I will use the Godot project `project.godot` file (hence the lexer/parser/formatter).  
+I already did this in the [gdpm] project.
+
 ## Project structure
 
 Based on what I just said in the previous section, the project will be a [Cargo workspace] with several crates:
 
 - `gdtoolkit`: The main command-line utility
-- `gdtoolkit-gdscript-formatter`: The formatter code
-- `gdtoolkit-gdscript-lexer`: The lexer code
-- `gdtoolkit-gdscript-linter`: The linter code
-- `gdtoolkit-gdscript-parser`: The parser code
+- `gdtoolkit-gdscript-lexer`: The GDScript lexer code
+- `gdtoolkit-gdscript-linter`: The GDScript linter code
+- `gdtoolkit-gdscript-formatter`: The GDScript formatter code
+- `gdtoolkit-gdscript-parser`: The GDScript parser code
+- `gdtoolkit-gdproject-lexer`: The "Godot project file" lexer code
+- `gdtoolkit-gdproject-formatter`: The "Godot project file" formatter code
+- `gdtoolkit-gdproject-parser`: The "Godot project file" parser code
 
 That's a straightforward design, and there is work to do!
 
@@ -57,10 +65,12 @@ That's a straightforward design, and there is work to do!
 
 Here is a quick view of the project implementation state, by order of priority:
 
-- **Lexer** _(75%)_: Works great on my projects, code need to be more clearly written, it's not really optimized so it performs poorly on really big files (maybe because of all the allocations),
-- **Formatter** _(50%)_: Know how to write back tokens to code, when applying the tool on my code base (mostly all my projects in a folder), it writes back exactly the same code, so only the rules are missing, 
-- **Parser** _(2%)_: Most of the work will be here, many things to do (and more things to do to improve the developer experience with nice error reports),
-- **Linter** _(0%)_: As it depends on the other crates, it's not even created yet :smile:
+- **GDScript**
+    - **GDScript Lexer** _(75%)_: Works great on my projects, code need to be more clearly written, it's not really optimized so it performs poorly on really big files (maybe because of all the allocations),
+    - **GDScript Formatter** _(50%)_: Know how to write back tokens to code, when applying the tool on my code base (mostly all my projects in a folder), it writes back exactly the same code, so only the rules are missing, 
+    - **GDScript Parser** _(2%)_: Most of the work will be here, many things to do (and more things to do to improve the developer experience with nice error reports),
+    - **GDScript Linter** _(0%)_: As it depends on the other crates, it's not even created yet :smile:
+- **Godot project** _(0%)_: Not started yet.
 
 So yep, mandatory warning: :warning: **this is a work in progress**, use at your own risks :warning:
 

@@ -46,6 +46,7 @@ pub enum GdDeclExtends {
     String(String),
 }
 
+/// GDScript class.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct GdClass {
     name: Option<GdIdentifier>,
@@ -90,12 +91,13 @@ pub enum GdValue {
     Boolean(bool),
 }
 
+/// GDScript parser.
 #[derive(Default)]
 pub struct GdScriptParser;
 
 impl GdScriptParser {
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_identifier(&self, tokens: &[Token]) -> Result<(GdIdentifier, usize)> {
+    fn parse_identifier(&self, tokens: &[Token]) -> Result<(GdIdentifier, usize)> {
         match tokens.first() {
             Some(Token::Identifier(i)) => Ok((GdIdentifier(i.clone()), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -104,7 +106,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_type(&self, tokens: &[Token]) -> Result<(GdType, usize)> {
+    fn parse_type(&self, tokens: &[Token]) -> Result<(GdType, usize)> {
         let mut cursor = 0;
         let mut value = String::new();
 
@@ -126,7 +128,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_value(&self, tokens: &[Token]) -> Result<(GdValue, usize)> {
+    fn parse_value(&self, tokens: &[Token]) -> Result<(GdValue, usize)> {
         match tokens.first() {
             Some(Token::Value(Value::Int(i))) => Ok((GdValue::Int(*i), 1)),
             Some(Token::Value(Value::Float(f))) => Ok((GdValue::Float(f.to_float()), 1)),
@@ -138,11 +140,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn ensure_keyword<'a>(
-        &self,
-        keyword: Keyword,
-        tokens: &'a [Token],
-    ) -> Result<(Token, usize)> {
+    fn ensure_keyword<'a>(&self, keyword: Keyword, tokens: &'a [Token]) -> Result<(Token, usize)> {
         match tokens.first() {
             Some(t @ Token::Keyword(k)) if *k == keyword => Ok((t.clone(), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -151,11 +149,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn maybe_token<'a>(
-        &self,
-        tok: Token,
-        tokens: &'a [Token],
-    ) -> Result<Option<(Token, usize)>> {
+    fn maybe_token<'a>(&self, tok: Token, tokens: &'a [Token]) -> Result<Option<(Token, usize)>> {
         match tokens.first() {
             Some(t) if *t == tok => Ok(Some((t.clone(), 1))),
             Some(_) => Ok(None),
@@ -164,7 +158,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn ensure_token<'a>(&self, tok: Token, tokens: &'a [Token]) -> Result<(Token, usize)> {
+    fn ensure_token<'a>(&self, tok: Token, tokens: &'a [Token]) -> Result<(Token, usize)> {
         match tokens.first() {
             Some(t) if *t == tok => Ok((t.clone(), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -173,7 +167,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn ensure_indent<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
+    fn ensure_indent<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
         match tokens.first() {
             Some(t @ Token::Indent) => Ok((t.clone(), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -182,7 +176,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn ensure_newline<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
+    fn ensure_newline<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
         match tokens.first() {
             Some(t @ Token::NewLine(_)) => Ok((t.clone(), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -191,7 +185,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn ensure_punct<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
+    fn ensure_punct<'a>(&self, tokens: &'a [Token]) -> Result<(Token, usize)> {
         match tokens.first() {
             Some(t @ Token::Punct(_)) => Ok((t.clone(), 1)),
             Some(t) => Err(Error::UnexpectedToken(t.clone())),
@@ -200,7 +194,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_decl_extends(&self, tokens: &[Token]) -> Result<(GdDeclExtends, usize)> {
+    fn parse_decl_extends(&self, tokens: &[Token]) -> Result<(GdDeclExtends, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -229,7 +223,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_decl_class_name(&self, tokens: &[Token]) -> Result<(GdDecl, usize)> {
+    fn parse_decl_class_name(&self, tokens: &[Token]) -> Result<(GdDecl, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -249,7 +243,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_decl_class(&self, tokens: &[Token]) -> Result<(GdClass, usize)> {
+    fn parse_decl_class(&self, tokens: &[Token]) -> Result<(GdClass, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -321,7 +315,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    pub fn parse_decl(&self, tokens: &[Token]) -> Result<(GdDecl, usize)> {
+    fn parse_decl(&self, tokens: &[Token]) -> Result<(GdDecl, usize)> {
         match tokens.first() {
             Some(Token::Keyword(Keyword::Extends)) => self
                 .parse_decl_extends(tokens)
@@ -337,6 +331,7 @@ impl GdScriptParser {
         }
     }
 
+    /// Parse tokens in a "top level" context (so a GDScript source file).
     #[tracing::instrument(skip(self, tokens), ret)]
     pub fn parse_top_level(&self, tokens: &[Token]) -> Result<GdClass> {
         let mut cursor = 0;

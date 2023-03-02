@@ -4,13 +4,12 @@ use std::{cmp::Ordering, fmt::Write};
 
 use crate::{
     error::{ErrorContext, ParseError, ParseResult},
-    token::QuoteMode,
+    token::{IndentationType, QuoteMode},
 };
 use crate::{
     token::{FloatType, IntType, Keyword, Operator, Punct, Token, Value},
     NewLine,
 };
-use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 struct TokenView<'a>(&'a [char]);
@@ -44,18 +43,27 @@ pub struct TokenReader {
     remaining_text: Vec<char>,
 }
 
+/// Token reader context.
 #[derive(Debug)]
 pub struct TokenReaderContext {
+    /// Previous read token.
     pub previous_token: Option<Token>,
+    /// Indentation type of the source code.
     pub indentation_type: IndentationType,
+    /// Indentation size of the source code.
     pub indentation_size: usize,
+    /// Mark if the indentation has already been detected in the source code.
     pub indentation_seen: bool,
+    /// Current indent size.
     pub current_indent: usize,
+    /// Columns seen in the source code.
     pub cols_seen: usize,
+    /// Lines seen in the source code.
     pub lines_seen: usize,
 }
 
 impl TokenReaderContext {
+    /// Get a position tuple.
     pub fn position(&self) -> (usize, usize) {
         (self.lines_seen, self.cols_seen)
     }
@@ -489,21 +497,7 @@ impl TokenReadUtils {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum IndentationType {
-    Tab,
-    Space,
-}
-
-impl IndentationType {
-    pub fn as_char(&self) -> char {
-        match self {
-            Self::Tab => '\t',
-            Self::Space => ' ',
-        }
-    }
-}
-
+/// Token span: a token with its position.
 #[derive(Clone, Debug)]
 pub struct TokenSpan {
     pub token: Token,
@@ -583,8 +577,8 @@ mod tests {
     use crate::{
         error::ParseResult,
         read::{TokenReadUtils, TokenReaderContext},
-        token::{NewLine, QuoteMode},
-        IndentationType, Token, Value,
+        token::{IndentationType, NewLine, QuoteMode},
+        Token, Value,
     };
 
     fn parser(

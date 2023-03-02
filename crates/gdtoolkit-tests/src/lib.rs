@@ -1,3 +1,10 @@
+//! Test utilities for gdtoolkit
+
+#![deny(missing_docs)]
+
+/// Setup test context:
+///
+/// - Activate a preconfigured tracing subscriber
 pub fn setup() {
     use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
     use tracing_tree::HierarchicalLayer;

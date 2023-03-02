@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+/// Int type alias.
 pub type IntType = i64;
+/// Float type alias.
 pub type FloatType = f64;
 
+/// Compact view, used for debug purposes.
 pub struct CompactTokenView<'a>(pub &'a Token);
 
 impl<'a> std::fmt::Display for CompactTokenView<'a> {
@@ -27,6 +30,8 @@ impl<'a> std::fmt::Display for CompactTokenView<'a> {
     }
 }
 
+/// Token.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Token {
     Comment(String),
@@ -43,18 +48,26 @@ pub enum Token {
     Whitespace(String),
 }
 
+/// Newline.
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum NewLine {
+    /// CRLF: "\r\n"
     CrLf,
+    /// LF: "\n"
     Lf,
 }
 
+/// Quote mode.
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum QuoteMode {
+    /// Single quotes: '
     Single,
+    /// Double quotes: "
     Double,
 }
 
+/// Operator.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Operator {
     AddAssign,
@@ -78,6 +91,8 @@ pub enum Operator {
     XorAssign,
 }
 
+/// Punctuation.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Punct {
     Ampersand,
@@ -106,6 +121,8 @@ pub enum Punct {
     Tilde,
 }
 
+/// Value.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Value {
     Boolean(bool),
@@ -141,6 +158,27 @@ impl FloatRepr {
     }
 }
 
+/// Indentation type.
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum IndentationType {
+    /// Tab
+    Tab,
+    /// Space
+    Space,
+}
+
+impl IndentationType {
+    /// Get the type representation as a char.
+    pub fn as_char(&self) -> char {
+        match self {
+            Self::Tab => '\t',
+            Self::Space => ' ',
+        }
+    }
+}
+
+/// Keyword.
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Keyword {
     And,

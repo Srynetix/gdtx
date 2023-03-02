@@ -1,3 +1,7 @@
+//! GDScript lexer module.
+
+#![deny(missing_docs)]
+
 mod error;
 mod lexer;
 mod read;
@@ -9,9 +13,9 @@ mod tests;
 
 pub use error::{Error, Result};
 pub use lexer::{GdScriptLexer, GdScriptLexerOutput};
-pub use read::{IndentationType, TokenReaderContext};
+pub use read::TokenReaderContext;
 pub use serializer::{LexerOutputFormat, LexerOutputSerializer};
 pub use token::{
-    CompactTokenView, FloatType, IntType, Keyword, NewLine, Operator, Punct, QuoteMode, Token,
-    Value,
+    CompactTokenView, FloatType, IndentationType, IntType, Keyword, NewLine, Operator, Punct,
+    QuoteMode, Token, Value,
 };

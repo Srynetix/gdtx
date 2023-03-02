@@ -1,3 +1,7 @@
+//! GDScript parser module.
+
+#![deny(missing_docs)]
+
 mod parser;
 mod serializer;
 

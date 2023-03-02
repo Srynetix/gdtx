@@ -6,15 +6,19 @@ use gdtoolkit_gdscript_lexer::{
     Value,
 };
 
+/// GDScript writer.
 #[derive(Default)]
 pub struct GdScriptWriter;
 
 #[derive(Default)]
 pub struct TokenWriter;
 
+/// GDScript writer context.
 #[derive(Debug)]
 pub struct GdScriptWriterContext {
+    /// Indentation type.
     pub indentation_type: IndentationType,
+    /// Indentation size.
     pub indentation_size: usize,
 }
 
@@ -30,6 +34,7 @@ impl From<&GdScriptLexerOutput> for GdScriptWriterContext {
 }
 
 impl GdScriptWriter {
+    /// Write tokens to writer.
     pub fn write_tokens<W: Write>(
         &self,
         ctx: &GdScriptWriterContext,
@@ -98,7 +103,7 @@ impl GdScriptWriter {
         Ok(())
     }
 
-    pub fn write_indent<W: Write>(
+    fn write_indent<W: Write>(
         &self,
         ctx: &GdScriptWriterContext,
         writer: &mut W,

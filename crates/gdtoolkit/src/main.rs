@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 use color_eyre::Result;
 use owo_colors::OwoColorize;
 

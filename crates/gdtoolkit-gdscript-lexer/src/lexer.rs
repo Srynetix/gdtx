@@ -5,9 +5,11 @@ use crate::{
     read::{TokenReaderContext, TokenSpan},
 };
 
+/// GDScript lexer.
 #[derive(Default)]
 pub struct GdScriptLexer;
 
+/// GDScript lexer output.
 #[derive(Debug)]
 pub struct GdScriptLexerOutput {
     ctx: TokenReaderContext,
@@ -15,14 +17,19 @@ pub struct GdScriptLexerOutput {
 }
 
 impl GdScriptLexerOutput {
+    /// Get token reader context.
     pub fn context(&self) -> &TokenReaderContext {
         &self.ctx
     }
 
+    /// Get tokens from spans.
     pub fn tokens(&self) -> Vec<Token> {
         self.spans.iter().map(|s| s.token.clone()).collect()
     }
 
+    /// Get parsable tokens from spans.
+    ///
+    /// It will ignore whitespaces (but not newlines) and comments.
     pub fn parsable_tokens(&self) -> Vec<Token> {
         self.spans
             .iter()
@@ -34,6 +41,7 @@ impl GdScriptLexerOutput {
 }
 
 impl GdScriptLexer {
+    /// Read input code and generate tokens.
     pub fn lex(&self, text: &str) -> Result<GdScriptLexerOutput> {
         let mut reader = TokenReader::new(text);
         let mut ctx = TokenReaderContext::default();

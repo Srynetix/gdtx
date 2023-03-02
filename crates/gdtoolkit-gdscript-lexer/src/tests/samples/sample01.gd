@@ -1,4 +1,4 @@
-# Log utilities.
+# Log utilities (from sxgd)
 extends Reference
 class_name SxLog
 

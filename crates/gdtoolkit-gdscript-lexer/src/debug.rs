@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use super::token::{NewLine, Token};
 
 /// Compact view, used for debug purposes.
@@ -22,5 +24,31 @@ impl<'a, 't> std::fmt::Display for CompactTokenView<'a, 't> {
             Token::Value(v) => f.write_fmt(format_args!("V({:?})", v)),
             Token::Whitespace(w) => f.write_fmt(format_args!("W({})", w)),
         }
+    }
+}
+
+pub struct TokenView<'a>(pub &'a str);
+
+impl<'a> std::fmt::Display for TokenView<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const MAX_ELEMS: usize = 20;
+
+        f.write_char('"')?;
+
+        for elem in self.0.chars().take(MAX_ELEMS) {
+            match elem {
+                '\n' => f.write_str("\\n")?,
+                '\r' => f.write_str("\\r")?,
+                c => f.write_char(c)?,
+            }
+        }
+
+        if self.0.len() > MAX_ELEMS {
+            f.write_char('…')?;
+        }
+
+        f.write_char('"')?;
+
+        Ok(())
     }
 }

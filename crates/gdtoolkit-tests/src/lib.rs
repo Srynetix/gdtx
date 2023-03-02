@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-/// Setup test context:
+/// Setup test context.
 ///
 /// - Activate a preconfigured tracing subscriber
 pub fn setup() {

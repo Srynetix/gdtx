@@ -1,4 +1,4 @@
-//! gdtoolkit CLI utility
+//! gdtoolkit CLI main.
 
 #![deny(missing_docs)]
 

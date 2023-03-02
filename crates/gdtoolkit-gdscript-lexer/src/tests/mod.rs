@@ -3,47 +3,47 @@ use crate::token::{NewLine, QuoteMode};
 use super::*;
 use pretty_assertions::assert_eq;
 
-fn tok_int(value: IntType) -> Token {
+fn tok_int<'t>(value: IntType) -> Token<'t> {
     Token::Value(Value::Int(value))
 }
 
-fn tok_bool(value: bool) -> Token {
+fn tok_bool<'t>(value: bool) -> Token<'t> {
     Token::Value(Value::Boolean(value))
 }
 
 fn tok_dqstr(value: &str) -> Token {
-    Token::Value(Value::String(value.into(), QuoteMode::Double))
+    Token::Value(Value::String(value, QuoteMode::Double))
 }
 
-fn tok_kw(value: Keyword) -> Token {
+fn tok_kw<'t>(value: Keyword) -> Token<'t> {
     Token::Keyword(value)
 }
 
 fn tok_ws(value: &str) -> Token {
-    Token::Whitespace(value.into())
+    Token::Whitespace(value)
 }
 
-fn tok_op(value: Operator) -> Token {
+fn tok_op<'t>(value: Operator) -> Token<'t> {
     Token::Operator(value)
 }
 
 fn tok_ident(value: &str) -> Token {
-    Token::Identifier(value.into())
+    Token::Identifier(value)
 }
 
-fn tok_punct(value: Punct) -> Token {
+fn tok_punct<'t>(value: Punct) -> Token<'t> {
     Token::Punct(value)
 }
 
-fn lex_tokens(values: &[&'static str]) -> Vec<Token> {
-    let output = GdScriptLexer::default().lex(&values.join("\n")).unwrap();
+fn lex_tokens(values: &str) -> Vec<Token> {
+    let output = GdScriptLexer::default().lex(values).unwrap();
     output.tokens()
 }
 
 #[test]
 fn expr_1() {
     assert_eq!(
-        lex_tokens(&["1 += 1abcd + (a * 2) && 5 & 1"]),
+        lex_tokens(concat!("1 += 1abcd + (a * 2) && 5 & 1")),
         vec![
             tok_int(1),
             tok_ws(" "),
@@ -77,7 +77,7 @@ fn expr_1() {
 #[test]
 fn bool() {
     assert_eq!(
-        lex_tokens(&["pouet = true and false || true"]),
+        lex_tokens(concat!("pouet = true and false || true")),
         vec![
             tok_ident("pouet"),
             tok_ws(" "),
@@ -101,10 +101,10 @@ fn bool() {
 #[rustfmt::skip]
 fn func() {
     assert_eq!(
-        lex_tokens(&[
-            "static func dummy(a: int) -> void:",
+        lex_tokens(concat!(
+            "static func dummy(a: int) -> void:\n",
             "    pass"
-        ]),
+        )),
         vec![
             tok_kw(Keyword::Static),
             tok_ws(" "),
@@ -134,13 +134,13 @@ fn func() {
 #[rustfmt::skip]
 fn indents() {
     assert_eq!(
-        lex_tokens(&[
-            "if hello:",
-            "    if hi:",
-            "        pass",
-            "        pass",
+        lex_tokens(concat!(
+            "if hello:\n",
+            "    if hi:\n",
+            "        pass\n",
+            "        pass\n",
             "print('Hey!')"
-        ]),
+        )),
         vec![
             tok_kw(Keyword::If),
             tok_ws(" "),
@@ -162,23 +162,23 @@ fn indents() {
             Token::Dedent,
             tok_ident("print"),
             tok_punct(Punct::OpenParens),
-            Token::Value(Value::String("Hey!".into(), QuoteMode::Single)),
+            Token::Value(Value::String("Hey!", QuoteMode::Single)),
             tok_punct(Punct::ClosedParens),
             Token::Eof
         ]
     );
 
     assert_eq!(
-        lex_tokens(&[
-            "if hello:",
-            "    if hi:",
-            "        pass",
-            "    pass",
-            "    if a:",
-            "        pass",
-            "    pass",
+        lex_tokens(concat!(
+            "if hello:\n",
+            "    if hi:\n",
+            "        pass\n",
+            "    pass\n",
+            "    if a:\n",
+            "        pass\n",
+            "    pass\n",
             "pass"
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::If),
@@ -224,17 +224,16 @@ fn indents() {
 }
 
 #[test]
-#[rustfmt::skip]
 fn indents_2() {
     // Special case: multiple dedents
     assert_eq!(
-        lex_tokens(&[
-            "pass",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "        pass\n",
+            "            pass\n",
             "    pass",
-            "        pass",
-            "            pass",
-            "    pass",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -266,12 +265,12 @@ fn indents_2() {
 fn indents_on_newline() {
     // Special case: multiple dedents
     assert_eq!(
-        lex_tokens(&[
-            "pass",
-            "    pass",
-            "    ",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "    \n",
             "pass"
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -295,12 +294,12 @@ fn indents_on_newline() {
 #[rustfmt::skip]
 fn indents_on_newline_2() {
     assert_eq!(
-        lex_tokens(&[
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "\n",
             "pass",
-            "    pass",
-            "",
-            "pass",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -324,13 +323,13 @@ fn indents_on_newline_2() {
 #[rustfmt::skip]
 fn indents_on_newline_3() {
     assert_eq!(
-        lex_tokens(&[
-            "pass",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "    \n",
+            "    \n",
             "    pass",
-            "    ",
-            "    ",
-            "    pass",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -355,13 +354,13 @@ fn indents_on_newline_3() {
 #[rustfmt::skip]
 fn indents_on_newline_4() {
     assert_eq!(
-        lex_tokens(&[
-            "pass",
-            "    pass",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "        pass\n",
+            "\n",
             "        pass",
-            "",
-            "        pass",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -392,14 +391,14 @@ fn indents_on_newline_4() {
 #[rustfmt::skip]
 fn indents_on_newline_5() {
     assert_eq!(
-        lex_tokens(&[
-            "pass",
-            "    pass",
-            "        pass",
-            "",
-            "        pass",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "        pass\n",
+            "\n",
+            "        pass\n",
             "    ",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -432,14 +431,14 @@ fn indents_on_newline_5() {
 #[rustfmt::skip]
 fn indents_on_newline_6() {
     assert_eq!(
-        lex_tokens(&[
-            "pass",
-            "    pass",
-            "        pass",
+        lex_tokens(concat!(
+            "pass\n",
+            "    pass\n",
+            "        pass\n",
+            "\n",
+            "        pass\n",
             "",
-            "        pass",
-            "",
-        ]),
+        )),
         vec![
             // Line 1
             tok_kw(Keyword::Pass),
@@ -473,11 +472,11 @@ fn indents_on_newline_6() {
 #[rustfmt::skip]
 fn strings() {
     assert_eq!(
-        lex_tokens(&[
-            "var output = \"\"",
-            "var new_prefix := \"   \" if last else \" │ \"",
+        lex_tokens(concat!(
+            "var output = \"\"\n",
+            "var new_prefix := \"   \" if last else \" │ \"\n",
             "output += 1",
-        ]),
+        )),
         vec![
             tok_kw(Keyword::Var),
             tok_ws(" "),
@@ -515,7 +514,7 @@ fn strings() {
 
 #[test]
 fn sample_1() {
-    let res = lex_tokens(&[include_str!("./samples/sample01.gd")]);
+    let res = lex_tokens(include_str!("./samples/sample01.gd"));
     assert!(!res.is_empty());
 
     println!("{:#?}", res);

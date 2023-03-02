@@ -38,16 +38,11 @@ impl<'a> std::fmt::Display for TokenView<'a> {
     }
 }
 
-pub struct TokenReader {
-    cursor: usize,
-    remaining_text: String,
-}
-
 /// Token reader context.
 #[derive(Debug)]
-pub struct TokenReaderContext {
+pub struct TokenReaderContext<'t> {
     /// Previous read token.
-    pub previous_token: Option<Token>,
+    pub previous_token: Option<Token<'t>>,
     /// Indentation type of the source code.
     pub indentation_type: IndentationType,
     /// Indentation size of the source code.
@@ -60,16 +55,18 @@ pub struct TokenReaderContext {
     pub cols_seen: usize,
     /// Lines seen in the source code.
     pub lines_seen: usize,
+    /// Cursor.
+    pub cursor: usize,
 }
 
-impl TokenReaderContext {
+impl<'t> TokenReaderContext<'t> {
     /// Get a position tuple.
     pub fn position(&self) -> (usize, usize) {
         (self.lines_seen, self.cols_seen)
     }
 }
 
-impl Default for TokenReaderContext {
+impl<'t> Default for TokenReaderContext<'t> {
     fn default() -> Self {
         Self {
             previous_token: None,
@@ -79,6 +76,7 @@ impl Default for TokenReaderContext {
             current_indent: 0,
             cols_seen: 0,
             lines_seen: 0,
+            cursor: 0,
         }
     }
 }
@@ -97,11 +95,11 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(skip(predicate), fields(data = %TokenView(data)), ret)]
-    fn take_while<'a, F>(
-        ctx: &TokenReaderContext,
-        data: &'a str,
+    fn take_while<'t, F>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
         mut predicate: F,
-    ) -> ParseResult<(&'a str, usize)>
+    ) -> ParseResult<(&'t str, usize)>
     where
         F: FnMut(char) -> bool,
     {
@@ -124,14 +122,20 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_comment(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_comment<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let (comment, chars_read) =
             Self::take_while(ctx, &data[1..], |c| c != '\n' && c != '\r').unwrap_or(("", 0));
-        Ok((Token::Comment(comment.into()), chars_read + 1))
+        Ok((Token::Comment(comment), chars_read + 1))
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_number(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_number<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let mut seen_dot = false;
 
         let (decimal, chars_read) = Self::take_while(ctx, data, |c| {
@@ -149,7 +153,6 @@ impl TokenReadMethods {
             }
         })?;
 
-        let decimal: String = decimal.into();
         if seen_dot {
             // Make sure the float is valid, before storing it in the token
             let _: FloatType = decimal
@@ -165,7 +168,10 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_string(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_string<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let mut chars = data.chars();
         let delimiter = chars.next().unwrap();
         let mut prev_char = delimiter;
@@ -194,7 +200,7 @@ impl TokenReadMethods {
         };
 
         Ok((
-            Token::Value(Value::String(value.into(), quote_mode)),
+            Token::Value(Value::String(value, quote_mode)),
             chars_read + 2,
         ))
     }
@@ -251,7 +257,10 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_identifier(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_identifier<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         // identifiers can't start with a number
         match data.chars().next() {
             Some(ch) if ch.is_ascii_digit() => {
@@ -263,31 +272,33 @@ impl TokenReadMethods {
 
         let (got, chars_read) =
             Self::take_while(ctx, data, |ch| ch == '_' || ch.is_alphanumeric())?;
-        let got: String = got.into();
 
-        match &got[..] {
+        match got {
             "true" => return Ok((Token::Value(Value::Boolean(true)), 4)),
             "false" => return Ok((Token::Value(Value::Boolean(false)), 5)),
             _ => (),
         }
 
-        match Self::read_keyword(&got) {
+        match Self::read_keyword(got) {
             Some(k) => Ok((Token::Keyword(k), chars_read)),
-            None => Ok((Token::Identifier(got.to_string()), chars_read)),
+            None => Ok((Token::Identifier(got), chars_read)),
         }
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_whitespace(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_whitespace<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let (s, chars_read) = Self::take_while(ctx, data, |ch| ch == ' ' || ch == '\t')?;
-        Ok((Token::Whitespace(s.into()), chars_read))
+        Ok((Token::Whitespace(s), chars_read))
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn try_read_indent(
-        ctx: &mut TokenReaderContext,
-        data: &str,
-    ) -> ParseResult<Option<(Vec<Token>, usize)>> {
+    fn try_read_indent<'t>(
+        ctx: &mut TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<Option<(Vec<Token<'t>>, usize)>> {
         let mut toks = vec![];
         let mut count = 0;
 
@@ -354,7 +365,10 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_nodepath(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_nodepath<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let next = match data[1..].chars().next() {
             Some(c) => c,
             None => return Err(Self::build_error(ctx, ParseError::UnexpectedEof)),
@@ -373,15 +387,15 @@ impl TokenReadMethods {
                 c.is_alphanumeric() || c == '_' || c == '/'
             })?;
 
-            Ok((Token::NodePath(value.into(), None), chars_read + 1))
+            Ok((Token::NodePath(value, None), chars_read + 1))
         }
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_compound_tokens(
-        ctx: &TokenReaderContext,
-        data: &str,
-    ) -> ParseResult<Option<(Token, usize)>> {
+    fn read_compound_tokens<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<Option<(Token<'t>, usize)>> {
         let mut chars = data.chars();
 
         let first = match chars.next() {
@@ -421,7 +435,10 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_newline(ctx: &TokenReaderContext, data: &str) -> ParseResult<(Token, usize)> {
+    fn read_newline<'t>(
+        ctx: &TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Token<'t>, usize)> {
         let mut chars = data.chars();
 
         match (chars.next(), chars.next()) {
@@ -432,10 +449,10 @@ impl TokenReadMethods {
     }
 
     #[tracing::instrument(fields(data = %TokenView(data)), ret)]
-    fn read_next_tokens(
-        ctx: &mut TokenReaderContext,
-        data: &str,
-    ) -> ParseResult<(Vec<Token>, usize)> {
+    fn read_next_tokens<'t>(
+        ctx: &mut TokenReaderContext<'t>,
+        data: &'t str,
+    ) -> ParseResult<(Vec<Token<'t>>, usize)> {
         // Try compound tokens
         if let Some((tok, sz)) = Self::read_compound_tokens(ctx, data)? {
             return Ok((vec![tok], sz));
@@ -500,22 +517,22 @@ impl TokenReadMethods {
 
 /// Token span: a token with its position.
 #[derive(Clone, Debug)]
-pub struct TokenSpan {
-    pub token: Token,
+pub struct TokenSpan<'t> {
+    pub token: Token<'t>,
     pub start: usize,
     pub end: usize,
 }
 
-impl TokenReader {
-    pub fn new(text: &str) -> Self {
-        Self {
-            cursor: 0,
-            remaining_text: text.chars().collect(),
-        }
-    }
+#[derive(Default)]
+pub struct TokenReader;
 
-    pub fn next_tokens(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Vec<TokenSpan>> {
-        if self.remaining_text.is_empty() {
+impl TokenReader {
+    pub fn next_tokens<'t>(
+        &self,
+        ctx: &mut TokenReaderContext<'t>,
+        remaining_text: &'t str,
+    ) -> ParseResult<Vec<TokenSpan<'t>>> {
+        if remaining_text[ctx.cursor..].is_empty() {
             let mut tokens = vec![];
 
             // Handle newline with remaining indents
@@ -527,17 +544,17 @@ impl TokenReader {
 
             tokens.push(Token::Eof);
 
-            let start = self.cursor;
-            let end = self.cursor;
+            let start = ctx.cursor;
+            let end = ctx.cursor;
 
             Ok(tokens
                 .into_iter()
                 .map(|token| TokenSpan { token, start, end })
                 .collect())
         } else {
-            let start = self.cursor;
-            let tokens = self._next_tokens(ctx)?;
-            let end = self.cursor;
+            let start = ctx.cursor;
+            let tokens = self._next_tokens(ctx, &remaining_text[ctx.cursor..])?;
+            let end = ctx.cursor;
 
             Ok(tokens
                 .into_iter()
@@ -546,9 +563,13 @@ impl TokenReader {
         }
     }
 
-    fn _next_tokens(&mut self, ctx: &mut TokenReaderContext) -> ParseResult<Vec<Token>> {
-        let (toks, chars_read) = TokenReadMethods::read_next_tokens(ctx, &self.remaining_text)?;
-        self._chomp(chars_read);
+    fn _next_tokens<'t>(
+        &self,
+        ctx: &mut TokenReaderContext<'t>,
+        text: &'t str,
+    ) -> ParseResult<Vec<Token<'t>>> {
+        let (toks, chars_read) = TokenReadMethods::read_next_tokens(ctx, text)?;
+        ctx.cursor += chars_read;
 
         if !toks.is_empty() {
             ctx.previous_token = toks.last().cloned();
@@ -566,43 +587,43 @@ impl TokenReader {
 
         Ok(toks)
     }
-
-    fn _chomp(&mut self, num_bytes: usize) {
-        self.remaining_text = self.remaining_text[num_bytes..].into();
-        self.cursor += num_bytes;
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        error::ParseResult,
+        error::{ErrorContext, ParseError, ParseResult},
         read::{TokenReadMethods, TokenReaderContext},
         token::{IndentationType, NewLine, QuoteMode},
         Token, Value,
     };
 
-    fn parser(
-        method: impl Fn(&TokenReaderContext, &str) -> ParseResult<(Token, usize)>,
-    ) -> impl Fn(&str) -> Token {
+    fn parser<'t>(
+        method: impl Fn(&TokenReaderContext<'t>, &'t str) -> ParseResult<(Token<'t>, usize)>,
+    ) -> impl Fn(&'t str) -> Token {
         move |s| {
             let mut ctx = TokenReaderContext::default();
             method(&mut ctx, s).unwrap().0
         }
     }
 
-    fn parser_indent(
-        method: impl Fn(&mut TokenReaderContext, &str) -> ParseResult<Option<(Vec<Token>, usize)>>,
-    ) -> impl Fn(&mut TokenReaderContext, &str) -> Option<Vec<Token>> {
+    fn parser_indent<'t>(
+        method: impl Fn(
+            &mut TokenReaderContext<'t>,
+            &'t str,
+        ) -> ParseResult<Option<(Vec<Token<'t>>, usize)>>,
+    ) -> impl Fn(&mut TokenReaderContext<'t>, &'t str) -> Option<Vec<Token<'t>>> {
         move |ctx, s| method(ctx, s).unwrap().map(|(a, _)| a)
+    }
+
+    fn parser_newline<'t>(s: &'t str) -> Result<Token<'t>, (ParseError, ErrorContext)> {
+        let ctx = TokenReaderContext::<'t>::default();
+        TokenReadMethods::read_newline(&ctx, s).map(|(t, _s)| t)
     }
 
     #[test]
     fn newline() {
-        let run = |s: &str| {
-            let ctx = TokenReaderContext::default();
-            TokenReadMethods::read_newline(&ctx, s).map(|(t, _s)| t)
-        };
+        let run = parser_newline;
 
         assert_eq!(run("\n").unwrap(), Token::NewLine(NewLine::Lf));
         assert_eq!(run("\r\n").unwrap(), Token::NewLine(NewLine::CrLf));
@@ -615,19 +636,19 @@ mod tests {
 
         assert_eq!(
             run("'abcd'"),
-            Token::Value(Value::String("abcd".into(), QuoteMode::Single))
+            Token::Value(Value::String("abcd", QuoteMode::Single))
         );
         assert_eq!(
             run("\"abcd\""),
-            Token::Value(Value::String("abcd".into(), QuoteMode::Double))
+            Token::Value(Value::String("abcd", QuoteMode::Double))
         );
         assert_eq!(
             run("''"),
-            Token::Value(Value::String("".into(), QuoteMode::Single))
+            Token::Value(Value::String("", QuoteMode::Single))
         );
         assert_eq!(
             run("\"\""),
-            Token::Value(Value::String("".into(), QuoteMode::Double))
+            Token::Value(Value::String("", QuoteMode::Double))
         );
     }
 
@@ -635,8 +656,8 @@ mod tests {
     fn comment() {
         let run = parser(TokenReadMethods::read_comment);
 
-        assert_eq!(run("# abcd"), Token::Comment(" abcd".into()));
-        assert_eq!(run("#abcd"), Token::Comment("abcd".into()));
+        assert_eq!(run("# abcd"), Token::Comment(" abcd"));
+        assert_eq!(run("#abcd"), Token::Comment("abcd"));
     }
 
     #[test]
@@ -721,14 +742,14 @@ mod tests {
     fn nodepath() {
         let run = parser(TokenReadMethods::read_nodepath);
 
-        assert_eq!(run("$A/B/C"), Token::NodePath("A/B/C".into(), None));
+        assert_eq!(run("$A/B/C"), Token::NodePath("A/B/C", None));
         assert_eq!(
             run("$'A /B/C'"),
-            Token::NodePath("A /B/C".into(), Some(QuoteMode::Single))
+            Token::NodePath("A /B/C", Some(QuoteMode::Single))
         );
         assert_eq!(
             run("$\"A /B/C\""),
-            Token::NodePath("A /B/C".into(), Some(QuoteMode::Double))
+            Token::NodePath("A /B/C", Some(QuoteMode::Double))
         );
     }
 }

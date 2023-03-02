@@ -18,17 +18,17 @@ mod value;
 /// Token.
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub enum Token {
-    Comment(String),
+pub enum Token<'t> {
+    Comment(&'t str),
     Dedent,
     Eof,
-    Identifier(String),
+    Identifier(&'t str),
     Indent,
     Keyword(Keyword),
     NewLine(NewLine),
-    NodePath(String, Option<QuoteMode>),
+    NodePath(&'t str, Option<QuoteMode>),
     Operator(Operator),
     Punct(Punct),
-    Value(Value),
-    Whitespace(String),
+    Value(Value<'t>),
+    Whitespace(&'t str),
 }

@@ -22,7 +22,7 @@ pub struct GdScriptWriterContext {
     pub indentation_size: usize,
 }
 
-impl From<&GdScriptLexerOutput> for GdScriptWriterContext {
+impl From<&GdScriptLexerOutput<'_>> for GdScriptWriterContext {
     fn from(value: &GdScriptLexerOutput) -> Self {
         let ctx = value.context();
 
@@ -119,12 +119,12 @@ impl GdScriptWriter {
 }
 
 impl TokenWriter {
-    pub fn token_to_string(&self, token: Token) -> Cow<str> {
+    pub fn token_to_string<'t>(&self, token: Token<'t>) -> Cow<'t, str> {
         match token {
             Token::Comment(comment) => Cow::Owned(format!("#{comment}")),
             Token::Dedent => Cow::Borrowed(""),
             Token::Eof => Cow::Borrowed(""),
-            Token::Identifier(ident) => Cow::Owned(ident),
+            Token::Identifier(ident) => Cow::Borrowed(ident),
             Token::Indent => Cow::Borrowed(""),
             Token::Keyword(k) => match k {
                 Keyword::And => Cow::Borrowed("and"),
@@ -241,7 +241,7 @@ impl TokenWriter {
                 Value::Float(f) => Cow::Owned(format!("{f}")),
                 Value::Int(i) => Cow::Owned(format!("{i}")),
             },
-            Token::Whitespace(w) => Cow::Owned(w),
+            Token::Whitespace(w) => Cow::Borrowed(w),
         }
     }
 }

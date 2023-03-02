@@ -1,9 +1,9 @@
 use super::token::{NewLine, Token};
 
 /// Compact view, used for debug purposes.
-pub struct CompactTokenView<'a>(pub &'a Token);
+pub struct CompactTokenView<'a, 't>(pub &'a Token<'t>);
 
-impl<'a> std::fmt::Display for CompactTokenView<'a> {
+impl<'a, 't> std::fmt::Display for CompactTokenView<'a, 't> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             Token::Comment(c) => f.write_fmt(format_args!("# {}", c)),

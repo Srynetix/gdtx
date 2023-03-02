@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{borrow::Cow, fmt::Write};
 
 use gdtoolkit_gdscript_lexer::{
     CompactTokenView, FloatType, IntType, Keyword, Punct, Token, Value,
@@ -35,44 +35,47 @@ impl<'a, 't> std::fmt::Display for TokenView<'a, 't> {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct GdType(String);
+pub struct GdType<'t>(Cow<'t, str>);
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct GdIdentifier(String);
+pub struct GdIdentifier<'t>(&'t str);
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum GdDeclExtends {
-    Type(GdType),
-    String(String),
+pub enum GdDeclExtends<'t> {
+    Type(GdType<'t>),
+    String(&'t str),
 }
 
 /// GDScript class.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct GdClass {
-    name: Option<GdIdentifier>,
-    decls: Vec<GdDecl>,
+pub struct GdClass<'t> {
+    #[serde(borrow)]
+    name: Option<GdIdentifier<'t>>,
+    decls: Vec<GdDecl<'t>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum GdAstNode {
-    Value(GdValue),
-    Identifier(GdIdentifier),
-    Type(GdType),
-    Decls(Vec<GdDecl>),
+pub enum GdAstNode<'t> {
+    #[serde(borrow)]
+    Value(GdValue<'t>),
+    Identifier(GdIdentifier<'t>),
+    Type(GdType<'t>),
+    Decls(Vec<GdDecl<'t>>),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum GdDecl {
-    Extends(GdDeclExtends),
-    ClassName(GdType),
-    Class(GdClass),
+pub enum GdDecl<'t> {
+    #[serde(borrow)]
+    Extends(GdDeclExtends<'t>),
+    ClassName(GdType<'t>),
+    Class(GdClass<'t>),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum GdValue {
+pub enum GdValue<'t> {
     Int(IntType),
     Float(FloatType),
-    String(String),
+    String(&'t str),
     Boolean(bool),
 }
 
@@ -82,22 +85,22 @@ pub struct GdScriptParser;
 
 impl GdScriptParser {
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_identifier<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdIdentifier, usize)> {
+    fn parse_identifier<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdIdentifier<'t>, usize)> {
         match tokens.first() {
-            Some(Token::Identifier(i)) => Ok((GdIdentifier((*i).into()), 1)),
+            Some(Token::Identifier(i)) => Ok((GdIdentifier(i), 1)),
             Some(t) => Err(Error::UnexpectedToken(format!("{:?}", t))),
             None => Err(Error::UnexpectedEof),
         }
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_type(&self, tokens: &[Token]) -> Result<(GdType, usize)> {
+    fn parse_type<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdType<'t>, usize)> {
         let mut cursor = 0;
         let mut value = String::new();
 
         loop {
             let (identifier, tok_count) = self.parse_identifier(&tokens[cursor..])?;
-            value += &(identifier.0).to_owned();
+            value += identifier.0;
             cursor += tok_count;
 
             match tokens.get(cursor) {
@@ -109,16 +112,16 @@ impl GdScriptParser {
             }
         }
 
-        Ok((GdType(value), cursor))
+        Ok((GdType(Cow::Owned(value)), cursor))
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_value<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdValue, usize)> {
+    fn parse_value<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdValue<'t>, usize)> {
         match tokens.first() {
             Some(Token::Value(Value::Int(i))) => Ok((GdValue::Int(*i), 1)),
             Some(Token::Value(Value::Float(f))) => Ok((GdValue::Float(f.to_float()), 1)),
             Some(Token::Value(Value::Boolean(b))) => Ok((GdValue::Boolean(*b), 1)),
-            Some(Token::Value(Value::String(s, _))) => Ok((GdValue::String((*s).into()), 1)),
+            Some(Token::Value(Value::String(s, _))) => Ok((GdValue::String(s), 1)),
             Some(t) => Err(Error::UnexpectedToken(format!("{:?}", t))),
             None => Err(Error::UnexpectedEof),
         }
@@ -191,7 +194,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_decl_extends<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDeclExtends, usize)> {
+    fn parse_decl_extends<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDeclExtends<'t>, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -211,16 +214,14 @@ impl GdScriptParser {
 
                 Ok((GdDeclExtends::Type(node), count))
             }
-            Some(Token::Value(Value::String(s, _))) => {
-                Ok((GdDeclExtends::String((*s).into()), count + 1))
-            }
+            Some(Token::Value(Value::String(s, _))) => Ok((GdDeclExtends::String(s), count + 1)),
             Some(t) => Err(Error::UnexpectedToken(format!("{:?}", t))),
             None => Err(Error::UnexpectedEof),
         }
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_decl_class_name<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDecl, usize)> {
+    fn parse_decl_class_name<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDecl<'t>, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -240,7 +241,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_decl_class<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdClass, usize)> {
+    fn parse_decl_class<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdClass<'t>, usize)> {
         let mut tokens = tokens;
         let mut count = 0;
 
@@ -312,7 +313,7 @@ impl GdScriptParser {
     }
 
     #[tracing::instrument(skip(self), fields(tokens = %TokenView(tokens)), level = "debug", ret)]
-    fn parse_decl<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDecl, usize)> {
+    fn parse_decl<'t>(&self, tokens: &[Token<'t>]) -> Result<(GdDecl<'t>, usize)> {
         match tokens.first() {
             Some(Token::Keyword(Keyword::Extends)) => self
                 .parse_decl_extends(tokens)
@@ -330,7 +331,7 @@ impl GdScriptParser {
 
     /// Parse tokens in a "top level" context (so a GDScript source file).
     #[tracing::instrument(skip(self, tokens), ret)]
-    pub fn parse_top_level<'t>(&self, tokens: &[Token<'t>]) -> Result<GdClass> {
+    pub fn parse_top_level<'t>(&self, tokens: &[Token<'t>]) -> Result<GdClass<'t>> {
         let mut cursor = 0;
         let mut decls = vec![];
 
@@ -420,15 +421,15 @@ mod tests {
                 decls: vec![
                     GdDecl::Extends(GdDeclExtends::Type(GdType("Node".into()))),
                     GdDecl::Class(GdClass {
-                        name: Some(GdIdentifier("_Inner".into())),
+                        name: Some(GdIdentifier("_Inner")),
                         decls: vec![GdDecl::Extends(GdDeclExtends::Type(GdType("Node".into())))]
                     }),
                     GdDecl::Class(GdClass {
-                        name: Some(GdIdentifier("_Inner2".into())),
+                        name: Some(GdIdentifier("_Inner2")),
                         decls: vec![
                             GdDecl::Extends(GdDeclExtends::Type(GdType("Node2D".into()))),
                             GdDecl::Class(GdClass {
-                                name: Some(GdIdentifier("_AlsoInner".into())),
+                                name: Some(GdIdentifier("_AlsoInner")),
                                 decls: vec![]
                             })
                         ]

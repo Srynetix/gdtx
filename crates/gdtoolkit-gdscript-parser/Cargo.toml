@@ -1,0 +1,17 @@
+[package]
+name = "gdtoolkit-gdscript-parser"
+version = "0.0.0"
+authors = ["Denis BOURGE <bourge.denis@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gdtoolkit-gdscript-lexer = { path = "../gdtoolkit-gdscript-lexer" }
+thiserror = "1.0.38"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
+tracing = "0.1.37"
+
+[dev-dependencies]
+gdtoolkit-tests = { path = "../gdtoolkit-tests" }

@@ -20,12 +20,13 @@ pub enum MainSubcommand {
 pub struct FmtCommand {
     /// Input path
     pub input: PathBuf,
-    /// Output path (or stdout if missing)
-    pub output: Option<PathBuf>,
 
-    /// Check formatting without writing
+    /// Only check formatting without showing output
     #[arg(short, long)]
     pub check: bool,
+    /// Write formatting in each input file
+    #[arg(short, long)]
+    pub write: bool,
     /// File pattern to ignore
     #[arg(short, long)]
     pub ignore: Option<String>,

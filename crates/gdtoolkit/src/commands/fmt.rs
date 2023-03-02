@@ -34,7 +34,7 @@ fn handle_format(cmd: FmtCommand) -> Result<CommandStatus> {
     for path in paths {
         let string_output = format_file_to_string(&path)?;
 
-        if let Some(path) = &cmd.output {
+        if cmd.write {
             std::fs::write(path, string_output)?;
         } else {
             println!("{}", string_output)

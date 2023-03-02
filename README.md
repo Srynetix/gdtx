@@ -66,7 +66,7 @@ That's a straightforward design, and there is work to do!
 Here is a quick view of the project implementation state, by order of priority:
 
 - **GDScript**
-    - **GDScript Lexer** _(75%)_: Works great on my projects, code need to be more clearly written, it's not really optimized so it performs poorly on really big files (maybe because of all the allocations),
+    - **GDScript Lexer** _(85%)_: Works great on my projects, code need to be more clearly written, capable of tokenizing a GDScript file of 77k lines in 1 second on my machine,
     - **GDScript Formatter** _(50%)_: Know how to write back tokens to code, when applying the tool on my code base (mostly all my projects in a folder), it writes back exactly the same code, so only the rules are missing, 
     - **GDScript Parser** _(2%)_: Most of the work will be here, many things to do (and more things to do to improve the developer experience with nice error reports),
     - **GDScript Linter** _(0%)_: As it depends on the other crates, it's not even created yet :smile:

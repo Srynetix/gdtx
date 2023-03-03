@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 
 use crate::parser::GdClass;
 
@@ -9,11 +9,12 @@ pub struct GdClassSerializer;
 
 /// GDScript class format.
 #[derive(Serialize, Deserialize)]
-pub struct GdClassFormat {
+pub struct GdClassFormat<'t> {
     /// Version.
     pub version: String,
     /// Class.
-    pub class: GdClass,
+    #[serde(borrow)]
+    pub class: GdClass<'t>,
 }
 
 impl GdClassSerializer {
@@ -23,7 +24,7 @@ impl GdClassSerializer {
     }
 
     /// Deserialize data.
-    pub fn deserialize<R: Read>(&self, reader: R) -> Result<GdClassFormat, Error> {
-        serde_json::from_reader(reader).map_err(|e| Error::new(ErrorKind::Other, e))
+    pub fn deserialize<'t>(&self, value: &'t str) -> Result<GdClassFormat<'t>, Error> {
+        serde_json::from_str(value).map_err(|e| Error::new(ErrorKind::Other, e))
     }
 }

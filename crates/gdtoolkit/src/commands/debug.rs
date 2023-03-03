@@ -36,9 +36,9 @@ pub fn handle_code_to_lex_command(cmd: CodeToLexCommand) -> Result<CommandStatus
 
 pub fn handle_lex_to_code_command(cmd: LexToCodeCommand) -> Result<CommandStatus> {
     let input_file = validate_file(&cmd.input)?;
-    let input_content = std::fs::File::open(input_file)?;
+    let input_content = std::fs::read_to_string(input_file)?;
     let lex_fmt_output_serializer = GdScriptLexerOutputSerializer::default();
-    let lex_fmt_output = lex_fmt_output_serializer.deserialize(input_content)?;
+    let lex_fmt_output = lex_fmt_output_serializer.deserialize(&input_content)?;
 
     let ctx = GdScriptWriterContext {
         indentation_type: lex_fmt_output.indentation_type,

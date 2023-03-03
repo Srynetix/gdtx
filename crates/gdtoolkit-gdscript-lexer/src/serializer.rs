@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 
 use crate::{lexer::GdScriptLexerOutput, IndentationType, Token};
 
@@ -9,7 +9,7 @@ pub struct GdScriptLexerOutputSerializer;
 
 /// Lexer output format.
 #[derive(Serialize, Deserialize)]
-pub struct GdScriptLexerOutputFormat {
+pub struct GdScriptLexerOutputFormat<'t> {
     /// Version.
     pub version: String,
     /// Indentation type.
@@ -17,11 +17,12 @@ pub struct GdScriptLexerOutputFormat {
     /// Indentation size.
     pub indentation_size: usize,
     /// Tokens.
-    pub tokens: Vec<Token>,
+    #[serde(borrow)]
+    pub tokens: Vec<Token<'t>>,
 }
 
-impl From<&GdScriptLexerOutput> for GdScriptLexerOutputFormat {
-    fn from(value: &GdScriptLexerOutput) -> Self {
+impl<'t> From<&'t GdScriptLexerOutput<'t>> for GdScriptLexerOutputFormat<'t> {
+    fn from(value: &'t GdScriptLexerOutput<'t>) -> Self {
         let ctx = value.context();
 
         Self {
@@ -44,7 +45,7 @@ impl GdScriptLexerOutputSerializer {
     }
 
     /// Deserialize data.
-    pub fn deserialize<R: Read>(&self, reader: R) -> Result<GdScriptLexerOutputFormat, Error> {
-        serde_json::from_reader(reader).map_err(|e| Error::new(ErrorKind::Other, e))
+    pub fn deserialize<'t>(&self, value: &'t str) -> Result<GdScriptLexerOutputFormat<'t>, Error> {
+        serde_json::from_str(value).map_err(|e| Error::new(ErrorKind::Other, e))
     }
 }

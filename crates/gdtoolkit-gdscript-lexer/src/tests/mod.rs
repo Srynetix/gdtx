@@ -513,9 +513,11 @@ fn strings() {
 }
 
 #[test]
-fn sample_1() {
-    let res = lex_tokens(include_str!("./samples/sample01.gd"));
-    assert!(!res.is_empty());
+fn sample_log() {
+    lex_tokens(include_str!("./samples/sample_log.gd"));
+}
 
-    println!("{:#?}", res);
+#[test]
+fn sample_77k() {
+    lex_tokens(include_str!("./samples/sample_77k.gd"));
 }

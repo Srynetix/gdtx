@@ -1,0 +1,63 @@
+name: Lint, format, build and test
+
+on:
+  push:
+
+jobs:
+  format:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: ./.github/actions/prepare
+    - run: just fmt-check
+
+  lint:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: ./.github/actions/prepare
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: lint-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - run: just lint-err
+
+  test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: ./.github/actions/prepare
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: test-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - run: just test-cov
+    - uses: coverallsapp/github-action@master
+      with:
+        path-to-lcov: lcov.info
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
+
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: ./.github/actions/prepare
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: build-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - run: just build

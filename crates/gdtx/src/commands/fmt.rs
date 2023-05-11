@@ -4,8 +4,8 @@ use std::{
 };
 
 use color_eyre::{eyre::Context, Result};
-use gdtoolkit_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
-use gdtoolkit_gdscript_lexer::GdScriptLexer;
+use gdtx_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
+use gdtx_gdscript_lexer::GdScriptLexer;
 use owo_colors::OwoColorize;
 use walkdir::WalkDir;
 

@@ -3,7 +3,7 @@ _default:
 
 # Run the CLI
 run:
-    cargo run --bin gdtoolkit
+    cargo run --bin gdtx
 
 # Build all
 build:

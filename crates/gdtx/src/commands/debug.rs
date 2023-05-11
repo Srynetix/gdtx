@@ -6,11 +6,11 @@ use crate::{
 };
 
 use color_eyre::{eyre::eyre, Result};
-use gdtoolkit_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
-use gdtoolkit_gdscript_lexer::{
+use gdtx_gdscript_formatter::{GdScriptWriter, GdScriptWriterContext};
+use gdtx_gdscript_lexer::{
     GdScriptLexer, GdScriptLexerOutputFormat, GdScriptLexerOutputSerializer,
 };
-use gdtoolkit_gdscript_parser::{GdClassFormat, GdClassSerializer, GdScriptParser};
+use gdtx_gdscript_parser::{GdClassFormat, GdClassSerializer, GdScriptParser};
 
 pub fn handle_debug_command(cmd: DebugCommand) -> Result<CommandStatus> {
     match cmd.debug_command {

@@ -1,8 +1,6 @@
 use std::{borrow::Cow, fmt::Write};
 
-use gdtoolkit_gdscript_lexer::{
-    CompactTokenView, FloatType, IntType, Keyword, Punct, Token, Value,
-};
+use gdtx_gdscript_lexer::{CompactTokenView, FloatType, IntType, Keyword, Punct, Token, Value};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -363,13 +361,13 @@ impl GdScriptParser {
 #[cfg(test)]
 mod tests {
     use crate::{GdClass, GdScriptParser};
-    use gdtoolkit_gdscript_lexer::GdScriptLexer;
+    use gdtx_gdscript_lexer::GdScriptLexer;
 
     use super::{GdDecl, GdDeclExtends, GdIdentifier, GdType};
 
     #[test]
     fn extends_and_classname() {
-        gdtoolkit_tests::setup();
+        gdtx_tests::setup();
 
         let input = "# Hello\nextends Node\nclass_name Pouet\n\n";
         let lex_output = GdScriptLexer::default().lex(input).unwrap();
@@ -391,7 +389,7 @@ mod tests {
 
     #[test]
     fn inner_class() {
-        gdtoolkit_tests::setup();
+        gdtx_tests::setup();
 
         let input = &[
             "# Hello",

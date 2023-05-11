@@ -1,5 +1,5 @@
 [package]
-name = "gdtoolkit"
+name = "gdtx"
 version = "0.1.0"
 authors = ["Denis BOURGE <bourge.denis@gmail.com>"]
 edition = "2021"
@@ -9,9 +9,9 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.1.6", features = ["derive"] }
 color-eyre = "0.6.2"
-gdtoolkit-gdscript-formatter = { path = "../gdtoolkit-gdscript-formatter" }
-gdtoolkit-gdscript-lexer = { path = "../gdtoolkit-gdscript-lexer" }
-gdtoolkit-gdscript-parser = { path = "../gdtoolkit-gdscript-parser" }
+gdtx-gdscript-formatter = { path = "../gdtx-gdscript-formatter" }
+gdtx-gdscript-lexer = { path = "../gdtx-gdscript-lexer" }
+gdtx-gdscript-parser = { path = "../gdtx-gdscript-parser" }
 owo-colors = "3.5.0"
 walkdir = "2.3.2"
 tracing = "0.1.37"

@@ -1,4 +1,4 @@
-//! Test utilities for gdtoolkit
+//! Test utilities for gdtx
 
 #![deny(missing_docs)]
 

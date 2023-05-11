@@ -1,6 +1,6 @@
-# gdtoolkit - Command-line utility for Godot Engine 3.x
+# gdtx - Godot Toolbox - Command-line utility for Godot Engine 3.x/4.x
 
-Welcome on the `gdtoolkit` project!
+Welcome on the `gdtx` project!
 
 - [Documentation](./docs)
 
@@ -21,7 +21,7 @@ Other features that could be great in this project are:
 5. Manage dependencies / addons (also somewhat possible with [gdpm])
 6. Compatibility with the all new [Godot] engine 4.x
 
-(I think I will merge [gdpm] in the `gdtoolkit` project, but that's something for future me.)
+(I think I will merge [gdpm] in the `gdtx` project, but that's something for future me.)
 
 One last thing, I want to do everything in [Rust].
 
@@ -50,14 +50,14 @@ I already did this in the [gdpm] project.
 
 Based on what I just said in the previous section, the project will be a [Cargo workspace] with several crates:
 
-- `gdtoolkit`: The main command-line utility
-- `gdtoolkit-gdscript-lexer`: The GDScript lexer code
-- `gdtoolkit-gdscript-linter`: The GDScript linter code
-- `gdtoolkit-gdscript-formatter`: The GDScript formatter code
-- `gdtoolkit-gdscript-parser`: The GDScript parser code
-- `gdtoolkit-gdproject-lexer`: The "Godot project file" lexer code
-- `gdtoolkit-gdproject-formatter`: The "Godot project file" formatter code
-- `gdtoolkit-gdproject-parser`: The "Godot project file" parser code
+- `gdtx`: The main command-line utility
+- `gdtx-gdscript-lexer`: The GDScript lexer code
+- `gdtx-gdscript-linter`: The GDScript linter code
+- `gdtx-gdscript-formatter`: The GDScript formatter code
+- `gdtx-gdscript-parser`: The GDScript parser code
+- `gdtx-gdproject-lexer`: The "Godot project file" lexer code
+- `gdtx-gdproject-formatter`: The "Godot project file" formatter code
+- `gdtx-gdproject-parser`: The "Godot project file" parser code
 
 That's a straightforward design, and there is work to do!
 

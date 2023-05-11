@@ -1,4 +1,4 @@
-//! gdtoolkit CLI module.
+//! gdtx CLI module.
 
 #![deny(missing_docs)]
 
@@ -53,7 +53,7 @@ impl CommandStatus {
     }
 }
 
-/// Run the gdtoolkit CLI.
+/// Run the gdtx CLI.
 pub fn run_cmdline() -> Result<CommandStatus> {
     color_eyre::install()?;
 

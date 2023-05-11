@@ -1,7 +1,7 @@
 use std::{borrow::Cow, io::Write};
 use tracing::debug;
 
-use gdtoolkit_gdscript_lexer::{
+use gdtx_gdscript_lexer::{
     GdScriptLexerOutput, IndentationType, Keyword, NewLine, Operator, Punct, QuoteMode, Token,
     Value,
 };
@@ -248,7 +248,7 @@ impl TokenWriter {
 
 #[cfg(test)]
 mod tests {
-    use gdtoolkit_gdscript_lexer::GdScriptLexer;
+    use gdtx_gdscript_lexer::GdScriptLexer;
     use tracing::debug;
 
     use super::{GdScriptWriter, GdScriptWriterContext};

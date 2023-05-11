@@ -1,4 +1,4 @@
-//! gdtoolkit CLI main.
+//! gdtx CLI main.
 
 #![deny(missing_docs)]
 
@@ -6,7 +6,7 @@ use color_eyre::Result;
 use owo_colors::OwoColorize;
 
 fn main() -> Result<()> {
-    let status = gdtoolkit::run_cmdline()?;
+    let status = gdtx::run_cmdline()?;
 
     match status.exit_code() {
         0 => {

@@ -1,3 +1,3 @@
 # Documentation
 
-- [gdtoolkit CLI](./cli.md): Read the CLI documentation
+- [gdtx CLI](./cli.md): Read the CLI documentation

@@ -1,8 +1,6 @@
 use std::{borrow::Cow, fmt::Write};
 
-use gdtx_gdscript_lexer::{
-    CompactTokenView, FloatType, IntType, Keyword, Punct, Token, Value,
-};
+use gdtx_gdscript_lexer::{CompactTokenView, FloatType, IntType, Keyword, Punct, Token, Value};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
